@@ -219,10 +219,11 @@ function ShelfPage({ books, selectedBookId, onSelectBook, onImport, importing }:
   );
 }
 
-function ReaderPage({ book, chapter, chapters, chapterIndex, setChapterIndex, selectedFont, fontSize, setFontSize, paragraphIndex, setParagraphIndex, setPage, onAddAnnotation }: {
+function ReaderPage({ book, chapter, chapters, annotations, chapterIndex, setChapterIndex, selectedFont, fontSize, setFontSize, paragraphIndex, setParagraphIndex, setPage, onAddAnnotation }: {
   book?: Book;
   chapter?: Chapter;
   chapters: Pick<Chapter, 'chapterIndex' | 'title' | 'paragraphs'>[];
+  annotations: Annotation[];
   chapterIndex: number;
   setChapterIndex: (index: number) => void;
   selectedFont: string;
@@ -237,6 +238,12 @@ function ReaderPage({ book, chapter, chapters, chapterIndex, setChapterIndex, se
   const [search, setSearch] = useState('');
   const [draft, setDraft] = useState('');
   const [composerOpen, setComposerOpen] = useState(false);
+  const [annotationTarget, setAnnotationTarget] = useState<{
+    quote: string;
+    paragraphIndex?: number;
+    source: 'paragraph' | 'selection';
+  } | null>(null);
+
   const searchResults = useMemo(() => {
     const keyword = search.trim();
     if (!keyword) return [];
@@ -245,6 +252,15 @@ function ReaderPage({ book, chapter, chapters, chapterIndex, setChapterIndex, se
       .filter((item) => item.text.includes(keyword) || item.title.includes(keyword)))
       .slice(0, 20);
   }, [chapters, search]);
+
+  const annotationCounts = useMemo(() => {
+    const counts = new Map<number, number>();
+    annotations.forEach((annotation) => {
+      if (annotation.paragraphIndex == null) return;
+      counts.set(annotation.paragraphIndex, (counts.get(annotation.paragraphIndex) || 0) + 1);
+    });
+    return counts;
+  }, [annotations]);
 
   useEffect(() => {
     if (paragraphIndex == null) {
@@ -256,16 +272,69 @@ function ReaderPage({ book, chapter, chapters, chapterIndex, setChapterIndex, se
     }, 80);
   }, [chapterIndex, paragraphIndex]);
 
+  useEffect(() => {
+    setAnnotationTarget(null);
+    setDraft('');
+    setComposerOpen(false);
+  }, [chapterIndex]);
+
   if (!book) {
     return <main className='screen reader-screen'><p className='empty-copy'>先去书架导入一本书。</p></main>;
   }
 
   const goChapter = (index: number, nextParagraph?: number) => {
+    setAnnotationTarget(null);
+    setComposerOpen(false);
     setParagraphIndex(nextParagraph);
     setChapterIndex(Math.min(book.chapterCount, Math.max(1, index)));
   };
 
-  const selectedQuote = paragraphIndex != null && paragraphIndex >= 0 ? chapter?.paragraphs[paragraphIndex] : undefined;
+  const captureTextSelection = () => {
+    const selection = window.getSelection();
+    const quote = selection?.toString().replace(/\s+/g, ' ').trim() || '';
+    if (quote.length < 2) return;
+
+    const anchor = selection?.anchorNode instanceof Element
+      ? selection.anchorNode
+      : selection?.anchorNode?.parentElement;
+    const paragraphElement = anchor?.closest('[data-paragraph-index]');
+    const nextParagraphIndex = paragraphElement?.getAttribute('data-paragraph-index');
+    const parsedParagraphIndex = nextParagraphIndex == null ? undefined : Number(nextParagraphIndex);
+
+    if (parsedParagraphIndex != null && Number.isFinite(parsedParagraphIndex)) {
+      setParagraphIndex(parsedParagraphIndex);
+    }
+    setAnnotationTarget({
+      quote,
+      paragraphIndex: parsedParagraphIndex != null && Number.isFinite(parsedParagraphIndex) ? parsedParagraphIndex : paragraphIndex,
+      source: 'selection',
+    });
+    setComposerOpen(false);
+  };
+
+  const selectParagraph = (index: number, text: string) => {
+    const selectedText = window.getSelection()?.toString().replace(/\s+/g, ' ').trim() || '';
+    if (selectedText.length > 1) return;
+    setParagraphIndex(index);
+    setAnnotationTarget({ quote: text, paragraphIndex: index, source: 'paragraph' });
+    setComposerOpen(false);
+  };
+
+  const closeAnnotationTarget = () => {
+    setAnnotationTarget(null);
+    setComposerOpen(false);
+    setDraft('');
+    window.getSelection()?.removeAllRanges();
+  };
+
+  const saveAnnotation = async () => {
+    if (!draft.trim() || !annotationTarget) return;
+    await onAddAnnotation(draft.trim(), annotationTarget.quote, annotationTarget.paragraphIndex);
+    setDraft('');
+    setComposerOpen(false);
+    setAnnotationTarget(null);
+    window.getSelection()?.removeAllRanges();
+  };
 
   return (
     <main className='screen reader-screen' ref={screenRef}>
@@ -285,7 +354,6 @@ function ReaderPage({ book, chapter, chapters, chapterIndex, setChapterIndex, se
           <button onClick={() => setFontSize(Math.max(14, fontSize - 1))}>A-</button>
           <strong>{fontSize}</strong>
           <button onClick={() => setFontSize(Math.min(28, fontSize + 1))}>A+</button>
-          <button onClick={() => setComposerOpen((value) => !value)}>批注</button>
         </div>
         {!!searchResults.length && (
           <div className='search-results'>
@@ -301,22 +369,10 @@ function ReaderPage({ book, chapter, chapters, chapterIndex, setChapterIndex, se
           </div>
         )}
       </section>
-      {composerOpen && (
-        <section className='annotation-composer'>
-          <small>{selectedQuote ? `引用：${selectedQuote.slice(0, 42)}` : '点选正文段落后可绑定批注位置'}</small>
-          <textarea value={draft} onChange={(event) => setDraft(event.target.value)} placeholder='写一条页边批注' />
-          <div>
-            <button onClick={() => setComposerOpen(false)}>取消</button>
-            <button className='solid-button' disabled={!draft.trim()} onClick={async () => {
-              await onAddAnnotation(draft, selectedQuote, paragraphIndex != null && paragraphIndex >= 0 ? paragraphIndex : undefined);
-              setDraft('');
-              setComposerOpen(false);
-            }}>保存</button>
-          </div>
-        </section>
-      )}
       <article
         className='reading-paper'
+        onMouseUp={captureTextSelection}
+        onTouchEnd={() => window.setTimeout(captureTextSelection, 80)}
         style={{
           ...(selectedFont ? { fontFamily: selectedFont } : {}),
           '--reader-font-size': `${fontSize}px`,
@@ -325,11 +381,30 @@ function ReaderPage({ book, chapter, chapters, chapterIndex, setChapterIndex, se
         <p className='chapter'>第 {chapterIndex} 章</p>
         <h1>{chapter?.title || book.title}</h1>
         <div className='ornament'>✦</div>
-        {(chapter?.paragraphs || []).map((text, index) => (
-          <p id={`paragraph-${chapterIndex}-${index}`} key={`${chapterIndex}-${index}`} className={index === paragraphIndex ? 'with-note' : ''} onClick={() => setParagraphIndex(index)}>
-            {text}
-          </p>
-        ))}
+        {(chapter?.paragraphs || []).map((text, index) => {
+          const count = annotationCounts.get(index) || 0;
+          const isTarget = annotationTarget?.paragraphIndex === index;
+          const isCurrent = paragraphIndex === index;
+          const className = [
+            'reader-paragraph',
+            count ? 'paragraph-has-note' : '',
+            isTarget ? 'paragraph-selected' : '',
+            isCurrent && !isTarget ? 'paragraph-current' : '',
+          ].filter(Boolean).join(' ');
+
+          return (
+            <p
+              id={`paragraph-${chapterIndex}-${index}`}
+              data-paragraph-index={index}
+              key={`${chapterIndex}-${index}`}
+              className={className}
+              onClick={() => selectParagraph(index, text)}
+            >
+              {count > 0 && <span className='paragraph-note-dot' aria-label={`${count} 条批注`}>{count}</span>}
+              {text}
+            </p>
+          );
+        })}
       </article>
       <div className='reader-progress'>
         <div className='progress-meta'>
@@ -346,9 +421,44 @@ function ReaderPage({ book, chapter, chapters, chapterIndex, setChapterIndex, se
           onChange={(event) => goChapter(Number(event.target.value))}
         />
       </div>
+
+      {annotationTarget && !composerOpen && (
+        <div className='reader-selection-bar'>
+          <button className='selection-summary' onClick={() => setComposerOpen(true)}>
+            <span>{annotationTarget.source === 'selection' ? '已选文字' : `第 ${(annotationTarget.paragraphIndex ?? 0) + 1} 段`}</span>
+            <strong>{annotationTarget.quote.slice(0, 36)}{annotationTarget.quote.length > 36 ? '…' : ''}</strong>
+          </button>
+          <button className='selection-add' onClick={() => setComposerOpen(true)}>+ Nenei 页边</button>
+          <button className='selection-close' onClick={closeAnnotationTarget} aria-label='取消批注目标'>×</button>
+        </div>
+      )}
+
+      {composerOpen && annotationTarget && (
+        <div className='reader-sheet-backdrop' onClick={() => setComposerOpen(false)}>
+          <section className='reader-annotation-sheet' onClick={(event) => event.stopPropagation()}>
+            <span className='sheet-handle' />
+            <p className='sheet-label'>{annotationTarget.source === 'selection' ? '引用所选文字' : '引用这一段'}</p>
+            <blockquote>{annotationTarget.quote}</blockquote>
+            <label>
+              <span>Nenei</span>
+              <textarea
+                autoFocus
+                value={draft}
+                onChange={(event) => setDraft(event.target.value)}
+                placeholder='写在页边……'
+              />
+            </label>
+            <div className='sheet-actions'>
+              <button onClick={() => setComposerOpen(false)}>先不写</button>
+              <button className='solid-button' disabled={!draft.trim()} onClick={saveAnnotation}>保存</button>
+            </div>
+          </section>
+        </div>
+      )}
     </main>
   );
 }
+
 
 function NotesPage({ book, annotations, chapterIndex, onAddAnnotation }: { book?: Book; annotations: Annotation[]; chapterIndex: number; onAddAnnotation: (text: string) => Promise<void> }) {
   const [draft, setDraft] = useState('');
@@ -663,11 +773,11 @@ function App() {
           setChapterIndex(1);
           setPage('reader');
         }} onImport={importBook} importing={importing} />}
-        {page === 'reader' && <ReaderPage book={selectedBook} chapter={chapter} chapters={chapters} chapterIndex={chapterIndex} setChapterIndex={setChapterIndex} selectedFont={selectedFont} fontSize={fontSize} setFontSize={setFontSize} paragraphIndex={paragraphIndex} setParagraphIndex={setParagraphIndex} setPage={setPage} onAddAnnotation={addAnnotation} />}
+        {page === 'reader' && <ReaderPage book={selectedBook} chapter={chapter} chapters={chapters} annotations={annotations} chapterIndex={chapterIndex} setChapterIndex={setChapterIndex} selectedFont={selectedFont} fontSize={fontSize} setFontSize={setFontSize} paragraphIndex={paragraphIndex} setParagraphIndex={setParagraphIndex} setPage={setPage} onAddAnnotation={addAnnotation} />}
         {page === 'notes' && <NotesPage book={selectedBook} annotations={annotations} chapterIndex={chapterIndex} onAddAnnotation={addAnnotation} />}
         {page === 'toc' && <TocPage book={selectedBook} chapters={chapters} chapterIndex={chapterIndex} setChapterIndex={setChapterIndex} setPage={setPage} />}
         {page === 'settings' && <SettingsPage elior={elior} nenei={nenei} setElior={setElior} setNenei={setNenei} accent={accent} setAccent={setAccent} fonts={fonts} selectedFont={selectedFont} setSelectedFont={setSelectedFont} onImportFont={importFont} />}
-        <BottomNav page={page} setPage={setPage} />
+        {page !== 'reader' && <BottomNav page={page} setPage={setPage} />}
       </div>
     </div>
   );
