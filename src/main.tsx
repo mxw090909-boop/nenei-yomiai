@@ -45,6 +45,13 @@ type Annotation = {
   createdAt: string;
 };
 
+type LocalProgress = {
+  chapterIndex: number;
+  paragraphIndex?: number;
+  percent: number;
+  updatedAt: number;
+};
+
 type StoredFont = {
   id: string;
   name: string;
@@ -74,6 +81,36 @@ async function api<T>(path: string, options?: RequestInit): Promise<T> {
 
 function initials(name: string) {
   return name.trim().slice(0, 1).toUpperCase() || '?';
+}
+
+function progressStorageKey(bookId: string) {
+  return `nenei-yomiai-progress-${bookId}`;
+}
+
+function loadLocalProgress(bookId: string): LocalProgress | undefined {
+  try {
+    const raw = localStorage.getItem(progressStorageKey(bookId));
+    if (!raw) return undefined;
+    const parsed = JSON.parse(raw) as Partial<LocalProgress>;
+    if (!parsed.chapterIndex || !Number.isFinite(parsed.chapterIndex)) return undefined;
+    return {
+      chapterIndex: Math.max(1, Math.round(parsed.chapterIndex)),
+      paragraphIndex: typeof parsed.paragraphIndex === 'number' ? parsed.paragraphIndex : undefined,
+      percent: typeof parsed.percent === 'number' ? Math.min(100, Math.max(0, Math.round(parsed.percent))) : 0,
+      updatedAt: typeof parsed.updatedAt === 'number' ? parsed.updatedAt : 0,
+    };
+  } catch {
+    return undefined;
+  }
+}
+
+function saveLocalProgress(bookId: string, progress: LocalProgress) {
+  localStorage.setItem(progressStorageKey(bookId), JSON.stringify(progress));
+}
+
+function calcProgressPercent(chapterIndex: number, chapterCount?: number) {
+  if (!chapterCount) return 0;
+  return Math.min(100, Math.max(0, Math.round((chapterIndex / chapterCount) * 100)));
 }
 
 function openFontDb() {
@@ -653,6 +690,8 @@ function App() {
   const [selectedFont, setSelectedFontState] = useState(localStorage.getItem('nenei-yomiai-font') || '');
   const [fontSize, setFontSizeState] = useState(Number(localStorage.getItem('nenei-yomiai-font-size') || '18'));
 
+  const progressSyncTimer = useRef<number | undefined>(undefined);
+
   const selectedBook = books.find((book) => book.id === selectedBookId) || books[0];
   const style = useMemo(() => ({ '--accent': accent } as React.CSSProperties), [accent]);
 
@@ -687,15 +726,35 @@ function App() {
     if (!selectedBook) return;
     setSelectedBookId(selectedBook.id);
     localStorage.setItem('nenei-yomiai-book', selectedBook.id);
-    api<{ ok: boolean; progress: { chapterIndex: number; paragraphIndex?: number }[] }>(`/progress?bookId=${selectedBook.id}`)
-      .then((data) => {
-        const current = data.progress[0];
-        if (current) {
-          setChapterIndex(current.chapterIndex);
-          setParagraphIndex(current.paragraphIndex);
-        }
-      })
-      .catch(console.error);
+
+    const localProgress = loadLocalProgress(selectedBook.id);
+    if (localProgress) {
+      setChapterIndex(Math.min(selectedBook.chapterCount, Math.max(1, localProgress.chapterIndex)));
+      setParagraphIndex(localProgress.paragraphIndex);
+      setBooks((currentBooks) => currentBooks.map((book) => (
+        book.id === selectedBook.id ? { ...book, progress: localProgress.percent } : book
+      )));
+    } else {
+      api<{ ok: boolean; progress: { chapterIndex: number; paragraphIndex?: number; percent?: number }[] }>(`/progress?bookId=${selectedBook.id}`)
+        .then((data) => {
+          const current = data.progress[0];
+          if (current) {
+            setChapterIndex(current.chapterIndex);
+            setParagraphIndex(current.paragraphIndex);
+            const percent = typeof current.percent === 'number'
+              ? Math.min(100, Math.max(0, Math.round(current.percent)))
+              : calcProgressPercent(current.chapterIndex, selectedBook.chapterCount);
+            saveLocalProgress(selectedBook.id, {
+              chapterIndex: current.chapterIndex,
+              paragraphIndex: current.paragraphIndex,
+              percent,
+              updatedAt: Date.now(),
+            });
+          }
+        })
+        .catch(console.error);
+    }
+
     api<{ ok: boolean; chapters: Pick<Chapter, 'chapterIndex' | 'title' | 'paragraphs'>[] }>(`/books/${selectedBook.id}/chapters?from=1&to=${selectedBook.chapterCount}`)
       .then((data) => setChapters(data.chapters))
       .catch(console.error);
@@ -714,12 +773,43 @@ function App() {
 
   useEffect(() => {
     if (!selectedBook) return;
-    const percent = selectedBook.chapterCount ? Math.min(100, Math.max(0, Math.round((chapterIndex / selectedBook.chapterCount) * 100))) : 0;
-    api('/progress', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ bookId: selectedBook.id, chapterIndex, paragraphIndex, percent }),
-    }).then(refreshBooks).catch(console.error);
+    const percent = calcProgressPercent(chapterIndex, selectedBook.chapterCount);
+    const nextStatus: ShelfStatus = percent >= 100
+      ? '已读'
+      : selectedBook.status === '已读'
+        ? '已读'
+        : '正在读';
+
+    const localProgress: LocalProgress = {
+      chapterIndex,
+      paragraphIndex,
+      percent,
+      updatedAt: Date.now(),
+    };
+
+    localStorage.setItem('nenei-yomiai-chapter', String(chapterIndex));
+    saveLocalProgress(selectedBook.id, localProgress);
+    setBooks((currentBooks) => currentBooks.map((book) => (
+      book.id === selectedBook.id ? { ...book, progress: percent, status: nextStatus } : book
+    )));
+
+    if (progressSyncTimer.current) {
+      window.clearTimeout(progressSyncTimer.current);
+    }
+
+    progressSyncTimer.current = window.setTimeout(() => {
+      api('/progress', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bookId: selectedBook.id, chapterIndex, paragraphIndex, percent, status: nextStatus }),
+      }).catch(console.error);
+    }, 220);
+
+    return () => {
+      if (progressSyncTimer.current) {
+        window.clearTimeout(progressSyncTimer.current);
+      }
+    };
   }, [selectedBook?.id, chapterIndex, paragraphIndex]);
 
   const importBook = async (file: File) => {
@@ -731,6 +821,8 @@ function App() {
       await refreshBooks();
       setSelectedBookId(data.book.id);
       setChapterIndex(1);
+      setParagraphIndex(undefined);
+      saveLocalProgress(data.book.id, { chapterIndex: 1, paragraphIndex: undefined, percent: calcProgressPercent(1, data.book.chapterCount), updatedAt: Date.now() });
       setPage('reader');
     } finally {
       setImporting(false);
@@ -769,8 +861,16 @@ function App() {
         <Header setPage={setPage} elior={elior} nenei={nenei} />
         {page === 'home' && <HomePage setPage={setPage} book={selectedBook} />}
         {page === 'shelf' && <ShelfPage books={books} selectedBookId={selectedBook?.id} onSelectBook={(id) => {
+          const targetBook = books.find((book) => book.id === id);
+          const savedProgress = loadLocalProgress(id);
           setSelectedBookId(id);
-          setChapterIndex(1);
+          setChapterIndex(savedProgress?.chapterIndex || 1);
+          setParagraphIndex(savedProgress?.paragraphIndex);
+          if (targetBook && savedProgress) {
+            setBooks((currentBooks) => currentBooks.map((book) => (
+              book.id === id ? { ...book, progress: savedProgress.percent } : book
+            )));
+          }
           setPage('reader');
         }} onImport={importBook} importing={importing} />}
         {page === 'reader' && <ReaderPage book={selectedBook} chapter={chapter} chapters={chapters} annotations={annotations} chapterIndex={chapterIndex} setChapterIndex={setChapterIndex} selectedFont={selectedFont} fontSize={fontSize} setFontSize={setFontSize} paragraphIndex={paragraphIndex} setParagraphIndex={setParagraphIndex} setPage={setPage} onAddAnnotation={addAnnotation} />}
