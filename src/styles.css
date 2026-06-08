@@ -425,19 +425,21 @@ h1, h2, h3, p { margin: 0; }
 .toc-progress { margin: -8px 0 18px; }
 .toc-progress span { width: 42%; }
 .chapter-list { border-top: 1px solid rgba(17,17,17,.14); }
-.chapter-list article {
+.chapter-list button {
   display: grid;
   grid-template-columns: 74px 1fr 56px;
   gap: 8px;
   padding: 15px 6px;
   border-bottom: 1px solid rgba(17,17,17,.12);
   align-items: center;
+  width: 100%;
+  text-align: left;
 }
 .chapter-list span,
 .chapter-list small { color: #77726a; font-size: 12px; }
 .chapter-list strong { font-size: 15px; font-weight: 600; }
-.chapter-list article.current { background: rgba(17,17,17,.035); }
-.chapter-list article.current strong { color: var(--accent); }
+.chapter-list button.current { background: rgba(17,17,17,.035); }
+.chapter-list button.current strong { color: var(--accent); }
 
 .pair-card {
   display: flex;
