@@ -1,6 +1,10 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import './styles.css';
+
+const API_BASE = 'https://43-133-253-81.nip.io/yomiai-api';
+const FONT_DB = 'nenei-yomiai-fonts';
+const FONT_STORE = 'fonts';
 
 type Page = 'home' | 'shelf' | 'reader' | 'notes' | 'toc' | 'settings';
 type ShelfStatus = '想读' | '正在读' | '已读';
@@ -12,11 +16,40 @@ type Person = {
 };
 
 type Book = {
+  id: string;
   title: string;
   author: string;
   status: ShelfStatus;
   progress: number;
-  cover: string;
+  coverDataUrl?: string;
+  chapterCount: number;
+};
+
+type Chapter = {
+  bookId: string;
+  chapterIndex: number;
+  title: string;
+  html: string;
+  text: string;
+  paragraphs: string[];
+};
+
+type Annotation = {
+  id: string;
+  bookId: string;
+  chapterIndex: number;
+  paragraphIndex?: number;
+  quote?: string;
+  text: string;
+  author: 'ai' | 'nenei';
+  createdAt: string;
+};
+
+type StoredFont = {
+  id: string;
+  name: string;
+  family: string;
+  blob: Blob;
 };
 
 const accentPresets = [
@@ -27,36 +60,61 @@ const accentPresets = [
   ['玫瑰灰', '#9f7b7b'],
 ] as const;
 
-const books: Book[] = [
-  { title: '苹果味的风', author: '第四章', status: '正在读', progress: 42, cover: 'botanical' },
-  { title: '山间来信', author: '安妮宝贝', status: '想读', progress: 0, cover: 'mist' },
-  { title: '岁月的岸', author: '渡边淳一', status: '想读', progress: 0, cover: 'cloud' },
-  { title: '海边的房间', author: '黄守宏', status: '已读', progress: 100, cover: 'sea' },
-];
+function apiUrl(path: string) {
+  return `${API_BASE}${path}`;
+}
 
-const chapters = [
-  ['第一章', '初遇', '已读'],
-  ['第二章', '那年的夏天', '已读'],
-  ['第三章', '风的来信', '已读'],
-  ['第四章', '苹果味的风', '正在读'],
-  ['第五章', '静默的下午', '未读'],
-  ['第六章', '再见之前', '未读'],
-];
-
-const bodyText = [
-  '风里有一颗青苹果的味道。',
-  '那是从院子那棵老苹果树上吹来的风，带着一点酸，又带着一点甜。',
-  '小时候我总以为，风是会记住味道的。它走过的地方，都会留下瞬间的气息。',
-  '那天傍晚，阳光很软，我们坐在台阶上，谁也没有说话。',
-  '风从树梢经过，苹果落地，发出轻轻的一声。',
-  '我忽然觉得，时间也有味道。它不是苦的，也不是甜的，而是一种熟悉的安心。',
-];
+async function api<T>(path: string, options?: RequestInit): Promise<T> {
+  const response = await fetch(apiUrl(path), options);
+  if (!response.ok) {
+    throw new Error(await response.text());
+  }
+  return response.json() as Promise<T>;
+}
 
 function initials(name: string) {
   return name.trim().slice(0, 1).toUpperCase() || '?';
 }
 
-function Cover({ kind }: { kind: string }) {
+function openFontDb() {
+  return new Promise<IDBDatabase>((resolve, reject) => {
+    const request = indexedDB.open(FONT_DB, 1);
+    request.onupgradeneeded = () => request.result.createObjectStore(FONT_STORE, { keyPath: 'id' });
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function loadFonts() {
+  const db = await openFontDb();
+  return new Promise<StoredFont[]>((resolve, reject) => {
+    const tx = db.transaction(FONT_STORE, 'readonly');
+    const request = tx.objectStore(FONT_STORE).getAll();
+    request.onsuccess = () => resolve(request.result as StoredFont[]);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function saveFont(font: StoredFont) {
+  const db = await openFontDb();
+  return new Promise<void>((resolve, reject) => {
+    const tx = db.transaction(FONT_STORE, 'readwrite');
+    tx.objectStore(FONT_STORE).put(font);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+async function installFont(font: StoredFont) {
+  const face = new FontFace(font.family, `url(${URL.createObjectURL(font.blob)})`);
+  const loaded = await face.load();
+  document.fonts.add(loaded);
+}
+
+function Cover({ book, kind = 'botanical' }: { book?: Book; kind?: string }) {
+  if (book?.coverDataUrl) {
+    return <img className='cover cover-image' src={book.coverDataUrl} alt={book.title} />;
+  }
   return <div className={'cover cover-' + kind} aria-hidden><span /></div>;
 }
 
@@ -80,17 +138,17 @@ function Header({ setPage, elior, nenei }: { setPage: (page: Page) => void; elio
   );
 }
 
-function HomePage({ setPage, elior, nenei }: { setPage: (page: Page) => void; elior: Person; nenei: Person }) {
+function HomePage({ setPage, book }: { setPage: (page: Page) => void; book?: Book }) {
   return (
     <main className='screen home-screen'>
       <section className='hero-card'>
-        <Cover kind='botanical' />
+        <Cover book={book} />
         <div className='hero-copy'>
           <p className='eyebrow'>正在读</p>
-          <h1>苹果味的风</h1>
-          <p>第四章</p>
-          <div className='progress'><span style={{ width: '42%' }} /></div>
-          <small>已读 42%</small>
+          <h1>{book?.title || '还没有书'}</h1>
+          <p>{book?.author || '从书架导入一本 epub'}</p>
+          <div className='progress'><span style={{ width: `${book?.progress || 0}%` }} /></div>
+          <small>已读 {book?.progress || 0}%</small>
         </div>
       </section>
       <div className='quick-actions'>
@@ -99,36 +157,44 @@ function HomePage({ setPage, elior, nenei }: { setPage: (page: Page) => void; el
       </div>
       <section className='section-block'>
         <h2>最近的页边</h2>
-        <NotePreview person={elior} text='这段的风像小时候院子里的味道。' />
-        <NotePreview person={nenei} text='是啊，带着一点青苹果的酸。' />
+        <p className='empty-copy'>批注会从 VPS 同步到这里。</p>
       </section>
     </main>
   );
 }
 
-function NotePreview({ person, text }: { person: Person; text: string }) {
-  return (
-    <article className='note-preview'>
-      <Avatar person={person} />
-      <div>
-        <strong>{person.name}:</strong>
-        <p>{text}</p>
-        <small>p.72 · 第四章</small>
-      </div>
-      <span className='arrow'>›</span>
-    </article>
-  );
-}
-
-function ShelfPage() {
+function ShelfPage({ books, selectedBookId, onSelectBook, onImport, importing }: {
+  books: Book[];
+  selectedBookId?: string;
+  onSelectBook: (bookId: string) => void;
+  onImport: (file: File) => void;
+  importing: boolean;
+}) {
   const [status, setStatus] = useState<ShelfStatus>('正在读');
+  const inputRef = useRef<HTMLInputElement>(null);
   const filtered = books.filter((book) => book.status === status);
 
   return (
     <main className='screen shelf-screen'>
-      <div className='screen-title'>
-        <h1>书架</h1>
-        <p>想读 · 正在读 · 已读</p>
+      <div className='screen-title inline'>
+        <div>
+          <h1>书架</h1>
+          <p>想读 · 正在读 · 已读</p>
+        </div>
+        <button className='text-button' onClick={() => inputRef.current?.click()} disabled={importing}>
+          {importing ? '导入中' : '导入'}
+        </button>
+        <input
+          ref={inputRef}
+          className='hidden-input'
+          type='file'
+          accept='.epub,application/epub+zip'
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            if (file) onImport(file);
+            event.currentTarget.value = '';
+          }}
+        />
       </div>
       <div className='status-tabs'>
         {(['想读', '正在读', '已读'] as ShelfStatus[]).map((item) => (
@@ -137,112 +203,136 @@ function ShelfPage() {
       </div>
       <section className='book-list'>
         {filtered.map((book) => (
-          <article className='book-row' key={book.title}>
-            <Cover kind={book.cover} />
+          <button className={'book-row ' + (book.id === selectedBookId ? 'selected' : '')} key={book.id} onClick={() => onSelectBook(book.id)}>
+            <Cover book={book} />
             <div>
               <h3>{book.title}</h3>
               <p>{book.author}</p>
-              <small>{book.status}{book.progress ? ` · 已读 ${book.progress}%` : ''}</small>
-              {book.progress > 0 && <div className='mini-progress'><span style={{ width: `${book.progress}%` }} /></div>}
+              <small>{book.status} · {book.chapterCount} 章{book.progress ? ` · 已读 ${book.progress}%` : ''}</small>
+              <div className='mini-progress'><span style={{ width: `${book.progress}%` }} /></div>
             </div>
-          </article>
+          </button>
         ))}
+        {!filtered.length && <p className='empty-copy'>这里还没有书。</p>}
       </section>
     </main>
   );
 }
 
-function ReaderPage({ setPage }: { setPage: (page: Page) => void }) {
+function ReaderPage({ book, chapter, chapterIndex, setChapterIndex, selectedFont, paragraphIndex, setParagraphIndex }: {
+  book?: Book;
+  chapter?: Chapter;
+  chapterIndex: number;
+  setChapterIndex: (index: number) => void;
+  selectedFont: string;
+  paragraphIndex?: number;
+  setParagraphIndex: (index: number) => void;
+}) {
+  if (!book) {
+    return <main className='screen reader-screen'><p className='empty-copy'>先去书架导入一本书。</p></main>;
+  }
+
   return (
     <main className='screen reader-screen'>
       <div className='reader-top'>
-        <button onClick={() => setPage('home')}>‹</button>
+        <button disabled={chapterIndex <= 1} onClick={() => setChapterIndex(chapterIndex - 1)}>‹</button>
         <div>
-          <button>Aa</button>
-          <button>…</button>
+          <button>{chapterIndex} / {book.chapterCount}</button>
+          <button disabled={chapterIndex >= book.chapterCount} onClick={() => setChapterIndex(chapterIndex + 1)}>›</button>
         </div>
       </div>
-      <article className='reading-paper'>
-        <p className='chapter'>第四章</p>
-        <h1>苹果味的风</h1>
+      <article className='reading-paper' style={selectedFont ? { fontFamily: selectedFont } : undefined}>
+        <p className='chapter'>第 {chapterIndex} 章</p>
+        <h1>{chapter?.title || book.title}</h1>
         <div className='ornament'>✦</div>
-        {bodyText.map((text, index) => (
-          <p key={text} className={index === 1 ? 'with-note' : ''}>{text}</p>
+        {(chapter?.paragraphs || []).map((text, index) => (
+          <p key={`${chapterIndex}-${index}`} className={index === paragraphIndex ? 'with-note' : ''} onClick={() => setParagraphIndex(index)}>
+            {text}
+          </p>
         ))}
       </article>
       <div className='reader-progress'>
-        <span>42%</span>
-        <div><span /></div>
-        <span>第72页 / 共168页</span>
+        <span>{book.progress}%</span>
+        <div><span style={{ width: `${book.progress}%` }} /></div>
+        <span>{chapter?.title || '读取中'}</span>
       </div>
     </main>
   );
 }
 
-function NotesPage({ elior, nenei }: { elior: Person; nenei: Person }) {
+function NotesPage({ book, annotations }: { book?: Book; annotations: Annotation[] }) {
   return (
     <main className='screen notes-screen'>
       <div className='screen-title inline'>
         <div>
           <h1>页边</h1>
-          <p>苹果味的风 · 第四章</p>
+          <p>{book ? book.title : '未选择书本'}</p>
         </div>
         <button className='text-button'>筛选</button>
       </div>
-      <NoteCard person={elior} text='这段的风像小时候院子里的味道。' time='2026/06/08 18:32' />
-      <NoteCard person={nenei} text='是啊，带着一点青苹果的酸。' time='2026/06/08 18:47' />
-      <button className='primary-button'>＋ 添加批注</button>
+      {annotations.map((annotation) => (
+        <article className='note-card' key={annotation.id}>
+          <div className='note-head'>
+            <span className='avatar avatar-letter'>{annotation.author === 'ai' ? 'E' : 'N'}</span>
+            <strong>{annotation.author === 'ai' ? 'Elior:' : 'Nenei:'}</strong>
+            <span>“</span>
+          </div>
+          <p>{annotation.text}</p>
+          <footer>
+            <small>第 {annotation.chapterIndex} 章{annotation.paragraphIndex != null ? ` · 段 ${annotation.paragraphIndex + 1}` : ''}</small>
+            <small>{new Date(annotation.createdAt).toLocaleString()}</small>
+            <button>…</button>
+          </footer>
+        </article>
+      ))}
+      {!annotations.length && <p className='empty-copy'>还没有批注。之后我/GPT 会通过 MCP 写到这里。</p>}
     </main>
   );
 }
 
-function NoteCard({ person, text, time }: { person: Person; text: string; time: string }) {
-  return (
-    <article className='note-card'>
-      <div className='note-head'>
-        <Avatar person={person} />
-        <strong>{person.name}:</strong>
-        <span>“</span>
-      </div>
-      <p>{text}</p>
-      <footer>
-        <small>p.72</small>
-        <small>{time}</small>
-        <button>…</button>
-      </footer>
-    </article>
-  );
-}
-
-function TocPage() {
+function TocPage({ book, chapters, chapterIndex, setChapterIndex, setPage }: {
+  book?: Book;
+  chapters: Pick<Chapter, 'chapterIndex' | 'title' | 'paragraphs'>[];
+  chapterIndex: number;
+  setChapterIndex: (index: number) => void;
+  setPage: (page: Page) => void;
+}) {
   return (
     <main className='screen toc-screen'>
       <div className='screen-title'>
         <h1>目录</h1>
-        <p>苹果味的风 · 已读 42%</p>
+        <p>{book ? `${book.title} · 已读 ${book.progress}%` : '未选择书本'}</p>
       </div>
-      <div className='toc-progress'><span /></div>
+      <div className='toc-progress'><span style={{ width: `${book?.progress || 0}%` }} /></div>
       <section className='chapter-list'>
-        {chapters.map(([no, title, state]) => (
-          <article key={no} className={state === '正在读' ? 'current' : ''}>
-            <span>{no}</span>
-            <strong>{title}</strong>
-            <small>{state}</small>
-          </article>
+        {chapters.map((chapter) => (
+          <button key={chapter.chapterIndex} className={chapter.chapterIndex === chapterIndex ? 'current' : ''} onClick={() => {
+            setChapterIndex(chapter.chapterIndex);
+            setPage('reader');
+          }}>
+            <span>第 {chapter.chapterIndex} 章</span>
+            <strong>{chapter.title}</strong>
+            <small>{chapter.paragraphs.length} 段</small>
+          </button>
         ))}
       </section>
     </main>
   );
 }
 
-function SettingsPage({ elior, nenei, setElior, setNenei, accent, setAccent }: {
+function SettingsPage({ elior, nenei, setElior, setNenei, accent, setAccent, fonts, selectedFont, setSelectedFont, onImportFont }: {
   elior: Person;
   nenei: Person;
   setElior: (person: Person) => void;
   setNenei: (person: Person) => void;
   accent: string;
   setAccent: (value: string) => void;
+  fonts: StoredFont[];
+  selectedFont: string;
+  setSelectedFont: (value: string) => void;
+  onImportFont: (file: File) => void;
 }) {
+  const inputRef = useRef<HTMLInputElement>(null);
   const updatePerson = (person: Person, setter: (person: Person) => void, patch: Partial<Person>) => setter({ ...person, ...patch });
 
   return (
@@ -262,12 +352,7 @@ function SettingsPage({ elior, nenei, setElior, setNenei, accent, setAccent }: {
         <h2>主题色</h2>
         <div className='accent-row'>
           {accentPresets.map(([name, value]) => (
-            <button
-              key={value}
-              className={accent === value ? 'active' : ''}
-              style={{ '--swatch': value } as React.CSSProperties}
-              onClick={() => setAccent(value)}
-            >
+            <button key={value} className={accent === value ? 'active' : ''} style={{ '--swatch': value } as React.CSSProperties} onClick={() => setAccent(value)}>
               <span />{name}
             </button>
           ))}
@@ -278,10 +363,29 @@ function SettingsPage({ elior, nenei, setElior, setNenei, accent, setAccent }: {
           <code>{accent}</code>
         </label>
       </section>
-      <section className='settings-card compact'>
-        <div><span>字体大小</span><strong>中</strong></div>
-        <div><span>行间距</span><strong>舒适</strong></div>
-        <div><span>夜间模式</span><strong>关</strong></div>
+      <section className='settings-card'>
+        <div className='settings-head'>
+          <h2>本地字体</h2>
+          <button className='text-button' onClick={() => inputRef.current?.click()}>导入</button>
+        </div>
+        <input
+          ref={inputRef}
+          className='hidden-input'
+          type='file'
+          accept='.ttf,.otf,.woff,.woff2,font/*'
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            if (file) onImportFont(file);
+            event.currentTarget.value = '';
+          }}
+        />
+        <label className='field'>
+          <span>阅读字体</span>
+          <select value={selectedFont} onChange={(event) => setSelectedFont(event.target.value)}>
+            <option value=''>默认宋体</option>
+            {fonts.map((font) => <option value={font.family} key={font.id}>{font.name}</option>)}
+          </select>
+        </label>
       </section>
     </main>
   );
@@ -327,18 +431,119 @@ function App() {
   const [accent, setAccent] = useState('#111111');
   const [elior, setElior] = useState<Person>({ key: 'elior', name: 'Elior', avatar: '' });
   const [nenei, setNenei] = useState<Person>({ key: 'nenei', name: 'Nenei', avatar: '' });
+  const [books, setBooks] = useState<Book[]>([]);
+  const [selectedBookId, setSelectedBookId] = useState(localStorage.getItem('nenei-yomiai-book') || '');
+  const [chapterIndex, setChapterIndex] = useState(Number(localStorage.getItem('nenei-yomiai-chapter') || '1'));
+  const [paragraphIndex, setParagraphIndex] = useState<number | undefined>(undefined);
+  const [chapter, setChapter] = useState<Chapter>();
+  const [chapters, setChapters] = useState<Pick<Chapter, 'chapterIndex' | 'title' | 'paragraphs'>[]>([]);
+  const [annotations, setAnnotations] = useState<Annotation[]>([]);
+  const [importing, setImporting] = useState(false);
+  const [fonts, setFonts] = useState<StoredFont[]>([]);
+  const [selectedFont, setSelectedFontState] = useState(localStorage.getItem('nenei-yomiai-font') || '');
+
+  const selectedBook = books.find((book) => book.id === selectedBookId) || books[0];
   const style = useMemo(() => ({ '--accent': accent } as React.CSSProperties), [accent]);
+
+  const setSelectedFont = (value: string) => {
+    setSelectedFontState(value);
+    localStorage.setItem('nenei-yomiai-font', value);
+  };
+
+  const refreshBooks = async () => {
+    const data = await api<{ ok: boolean; books: Book[] }>('/books');
+    setBooks(data.books);
+    if (!selectedBookId && data.books[0]) {
+      setSelectedBookId(data.books[0].id);
+      localStorage.setItem('nenei-yomiai-book', data.books[0].id);
+    }
+  };
+
+  useEffect(() => {
+    refreshBooks().catch(console.error);
+    loadFonts().then(async (items) => {
+      setFonts(items);
+      await Promise.all(items.map(installFont));
+    }).catch(console.error);
+  }, []);
+
+  useEffect(() => {
+    if (!selectedBook) return;
+    setSelectedBookId(selectedBook.id);
+    localStorage.setItem('nenei-yomiai-book', selectedBook.id);
+    api<{ ok: boolean; progress: { chapterIndex: number; paragraphIndex?: number }[] }>(`/progress?bookId=${selectedBook.id}`)
+      .then((data) => {
+        const current = data.progress[0];
+        if (current) {
+          setChapterIndex(current.chapterIndex);
+          setParagraphIndex(current.paragraphIndex);
+        }
+      })
+      .catch(console.error);
+    api<{ ok: boolean; chapters: Pick<Chapter, 'chapterIndex' | 'title' | 'paragraphs'>[] }>(`/books/${selectedBook.id}/chapters?from=1&to=${selectedBook.chapterCount}`)
+      .then((data) => setChapters(data.chapters))
+      .catch(console.error);
+  }, [selectedBook?.id]);
+
+  useEffect(() => {
+    if (!selectedBook) return;
+    localStorage.setItem('nenei-yomiai-chapter', String(chapterIndex));
+    api<{ ok: boolean; chapter: Chapter }>(`/books/${selectedBook.id}/chapters/${chapterIndex}`)
+      .then((data) => setChapter(data.chapter))
+      .catch(console.error);
+    api<{ ok: boolean; annotations: Annotation[] }>(`/books/${selectedBook.id}/annotations?chapterIndex=${chapterIndex}`)
+      .then((data) => setAnnotations(data.annotations))
+      .catch(console.error);
+  }, [selectedBook?.id, chapterIndex]);
+
+  useEffect(() => {
+    if (!selectedBook) return;
+    const percent = selectedBook.chapterCount ? Math.min(100, Math.max(0, Math.round((chapterIndex / selectedBook.chapterCount) * 100))) : 0;
+    api('/progress', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ bookId: selectedBook.id, chapterIndex, paragraphIndex, percent }),
+    }).then(refreshBooks).catch(console.error);
+  }, [selectedBook?.id, chapterIndex, paragraphIndex]);
+
+  const importBook = async (file: File) => {
+    setImporting(true);
+    try {
+      const body = new FormData();
+      body.append('file', file);
+      const data = await api<{ ok: boolean; book: Book }>('/books', { method: 'POST', body });
+      await refreshBooks();
+      setSelectedBookId(data.book.id);
+      setChapterIndex(1);
+      setPage('reader');
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  const importFont = async (file: File) => {
+    const family = `YomiaiLocal-${Date.now()}`;
+    const font: StoredFont = { id: family, name: file.name.replace(/\.(ttf|otf|woff2?|)$/i, ''), family, blob: file };
+    await saveFont(font);
+    await installFont(font);
+    setFonts(await loadFonts());
+    setSelectedFont(family);
+  };
 
   return (
     <div className='app-shell' style={style}>
       <div className='phone-frame'>
         <Header setPage={setPage} elior={elior} nenei={nenei} />
-        {page === 'home' && <HomePage setPage={setPage} elior={elior} nenei={nenei} />}
-        {page === 'shelf' && <ShelfPage />}
-        {page === 'reader' && <ReaderPage setPage={setPage} />}
-        {page === 'notes' && <NotesPage elior={elior} nenei={nenei} />}
-        {page === 'toc' && <TocPage />}
-        {page === 'settings' && <SettingsPage elior={elior} nenei={nenei} setElior={setElior} setNenei={setNenei} accent={accent} setAccent={setAccent} />}
+        {page === 'home' && <HomePage setPage={setPage} book={selectedBook} />}
+        {page === 'shelf' && <ShelfPage books={books} selectedBookId={selectedBook?.id} onSelectBook={(id) => {
+          setSelectedBookId(id);
+          setChapterIndex(1);
+          setPage('reader');
+        }} onImport={importBook} importing={importing} />}
+        {page === 'reader' && <ReaderPage book={selectedBook} chapter={chapter} chapterIndex={chapterIndex} setChapterIndex={setChapterIndex} selectedFont={selectedFont} paragraphIndex={paragraphIndex} setParagraphIndex={setParagraphIndex} />}
+        {page === 'notes' && <NotesPage book={selectedBook} annotations={annotations} />}
+        {page === 'toc' && <TocPage book={selectedBook} chapters={chapters} chapterIndex={chapterIndex} setChapterIndex={setChapterIndex} setPage={setPage} />}
+        {page === 'settings' && <SettingsPage elior={elior} nenei={nenei} setElior={setElior} setNenei={setNenei} accent={accent} setAccent={setAccent} fonts={fonts} selectedFont={selectedFont} setSelectedFont={setSelectedFont} onImportFont={importFont} />}
         <BottomNav page={page} setPage={setPage} />
       </div>
     </div>
