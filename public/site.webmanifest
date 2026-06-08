@@ -1,0 +1,22 @@
+{
+  "name": "nenei-yomiai",
+  "short_name": "nenei-yomiai",
+  "start_url": "/nenei-yomiai/",
+  "display": "standalone",
+  "background_color": "#fffefa",
+  "theme_color": "#fffefa",
+  "icons": [
+    {
+      "src": "/nenei-yomiai/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/nenei-yomiai/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
