@@ -290,14 +290,30 @@ function ReaderPage({ book, chapter, chapters, annotations, chapterIndex, setCha
       .slice(0, 20);
   }, [chapters, search]);
 
-  const annotationCounts = useMemo(() => {
-    const counts = new Map<number, number>();
+  const annotationsByParagraph = useMemo(() => {
+    const map = new Map<number, Annotation[]>();
+    const paragraphs = chapter?.paragraphs || [];
+
     annotations.forEach((annotation) => {
-      if (annotation.paragraphIndex == null) return;
-      counts.set(annotation.paragraphIndex, (counts.get(annotation.paragraphIndex) || 0) + 1);
+      let targetIndex = annotation.paragraphIndex;
+
+      if ((targetIndex == null || !Number.isFinite(targetIndex)) && annotation.quote) {
+        const cleanQuote = annotation.quote.replace(/\s+/g, ' ').trim();
+        targetIndex = paragraphs.findIndex((paragraph) => paragraph.replace(/\s+/g, ' ').includes(cleanQuote));
+      }
+
+      if (targetIndex == null || !Number.isFinite(targetIndex) || targetIndex < 0) return;
+      map.set(targetIndex, [...(map.get(targetIndex) || []), annotation]);
     });
-    return counts;
-  }, [annotations]);
+
+    return map;
+  }, [annotations, chapter?.paragraphs]);
+
+  const [threadTarget, setThreadTarget] = useState<{
+    quote: string;
+    paragraphIndex: number;
+    annotations: Annotation[];
+  } | null>(null);
 
   useEffect(() => {
     if (paragraphIndex == null) {
@@ -311,6 +327,7 @@ function ReaderPage({ book, chapter, chapters, annotations, chapterIndex, setCha
 
   useEffect(() => {
     setAnnotationTarget(null);
+    setThreadTarget(null);
     setDraft('');
     setComposerOpen(false);
   }, [chapterIndex]);
@@ -321,6 +338,7 @@ function ReaderPage({ book, chapter, chapters, annotations, chapterIndex, setCha
 
   const goChapter = (index: number, nextParagraph?: number) => {
     setAnnotationTarget(null);
+    setThreadTarget(null);
     setComposerOpen(false);
     setParagraphIndex(nextParagraph);
     setChapterIndex(Math.min(book.chapterCount, Math.max(1, index)));
@@ -349,16 +367,31 @@ function ReaderPage({ book, chapter, chapters, annotations, chapterIndex, setCha
     setComposerOpen(false);
   };
 
+  const openAnnotationThread = (index: number, text: string) => {
+    const existing = annotationsByParagraph.get(index) || [];
+    setParagraphIndex(index);
+    setAnnotationTarget({ quote: text, paragraphIndex: index, source: 'paragraph' });
+    setThreadTarget({ quote: text, paragraphIndex: index, annotations: existing });
+    setComposerOpen(false);
+  };
+
   const selectParagraph = (index: number, text: string) => {
     const selectedText = window.getSelection()?.toString().replace(/\s+/g, ' ').trim() || '';
     if (selectedText.length > 1) return;
+    const existing = annotationsByParagraph.get(index) || [];
+    if (existing.length) {
+      openAnnotationThread(index, text);
+      return;
+    }
     setParagraphIndex(index);
+    setThreadTarget(null);
     setAnnotationTarget({ quote: text, paragraphIndex: index, source: 'paragraph' });
     setComposerOpen(false);
   };
 
   const closeAnnotationTarget = () => {
     setAnnotationTarget(null);
+    setThreadTarget(null);
     setComposerOpen(false);
     setDraft('');
     window.getSelection()?.removeAllRanges();
@@ -369,6 +402,7 @@ function ReaderPage({ book, chapter, chapters, annotations, chapterIndex, setCha
     await onAddAnnotation(draft.trim(), annotationTarget.quote, annotationTarget.paragraphIndex);
     setDraft('');
     setComposerOpen(false);
+    setThreadTarget(null);
     setAnnotationTarget(null);
     window.getSelection()?.removeAllRanges();
   };
@@ -419,13 +453,16 @@ function ReaderPage({ book, chapter, chapters, annotations, chapterIndex, setCha
         <h1>{chapter?.title || book.title}</h1>
         <div className='ornament'>✦</div>
         {(chapter?.paragraphs || []).map((text, index) => {
-          const count = annotationCounts.get(index) || 0;
+          const paragraphAnnotations = annotationsByParagraph.get(index) || [];
+          const count = paragraphAnnotations.length;
           const isTarget = annotationTarget?.paragraphIndex === index;
+          const isThread = threadTarget?.paragraphIndex === index;
           const isCurrent = paragraphIndex === index;
           const className = [
             'reader-paragraph',
             count ? 'paragraph-has-note' : '',
             isTarget ? 'paragraph-selected' : '',
+            isThread ? 'paragraph-thread-open' : '',
             isCurrent && !isTarget ? 'paragraph-current' : '',
           ].filter(Boolean).join(' ');
 
@@ -437,7 +474,19 @@ function ReaderPage({ book, chapter, chapters, annotations, chapterIndex, setCha
               className={className}
               onClick={() => selectParagraph(index, text)}
             >
-              {count > 0 && <span className='paragraph-note-dot' aria-label={`${count} 条批注`}>{count}</span>}
+              {count > 0 && (
+                <button
+                  type='button'
+                  className='paragraph-note-dot'
+                  aria-label={`查看 ${count} 条批注`}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    openAnnotationThread(index, text);
+                  }}
+                >
+                  {count}
+                </button>
+              )}
               {text}
             </p>
           );
@@ -459,7 +508,7 @@ function ReaderPage({ book, chapter, chapters, annotations, chapterIndex, setCha
         />
       </div>
 
-      {annotationTarget && !composerOpen && (
+      {annotationTarget && !composerOpen && !threadTarget && (
         <div className='reader-selection-bar'>
           <button className='selection-summary' onClick={() => setComposerOpen(true)}>
             <span>{annotationTarget.source === 'selection' ? '已选文字' : `第 ${(annotationTarget.paragraphIndex ?? 0) + 1} 段`}</span>
@@ -467,6 +516,37 @@ function ReaderPage({ book, chapter, chapters, annotations, chapterIndex, setCha
           </button>
           <button className='selection-add' onClick={() => setComposerOpen(true)}>+ Nenei 页边</button>
           <button className='selection-close' onClick={closeAnnotationTarget} aria-label='取消批注目标'>×</button>
+        </div>
+      )}
+
+
+      {threadTarget && !composerOpen && (
+        <div className='reader-sheet-backdrop' onClick={() => setThreadTarget(null)}>
+          <section className='reader-annotation-sheet reader-thread-sheet' onClick={(event) => event.stopPropagation()}>
+            <span className='sheet-handle' />
+            <p className='sheet-label'>这一段的页边</p>
+            <blockquote>{threadTarget.quote}</blockquote>
+            <div className='thread-note-list'>
+              {threadTarget.annotations.map((annotation) => (
+                <article className='thread-note' key={annotation.id}>
+                  <div>
+                    <strong>{annotation.author === 'ai' ? 'Elior' : 'Nenei'}</strong>
+                    <small>{new Date(annotation.createdAt).toLocaleString()}</small>
+                  </div>
+                  {annotation.quote && annotation.quote !== threadTarget.quote && <em>“{annotation.quote}”</em>}
+                  <p>{annotation.text}</p>
+                </article>
+              ))}
+            </div>
+            <div className='sheet-actions'>
+              <button onClick={closeAnnotationTarget}>收起</button>
+              <button className='solid-button' onClick={() => {
+                setAnnotationTarget({ quote: threadTarget.quote, paragraphIndex: threadTarget.paragraphIndex, source: 'paragraph' });
+                setThreadTarget(null);
+                setComposerOpen(true);
+              }}>Nenei 再写一条</button>
+            </div>
+          </section>
         </div>
       )}
 

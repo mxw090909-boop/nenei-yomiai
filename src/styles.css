@@ -905,3 +905,58 @@ h1, h2, h3, p { margin: 0; }
     padding: 16px 14px calc(16px + env(safe-area-inset-bottom));
   }
 }
+
+.paragraph-thread-open {
+  background: rgba(17,17,17,.035);
+}
+
+.reader-thread-sheet {
+  max-height: min(78%, 560px);
+}
+
+.thread-note-list {
+  display: grid;
+  gap: 10px;
+  margin: 0 0 14px;
+}
+
+.thread-note {
+  border: 1px solid rgba(17,17,17,.12);
+  background: rgba(255,255,255,.62);
+  padding: 12px 13px;
+}
+
+.thread-note div {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.thread-note strong {
+  font-size: 13px;
+  color: var(--accent);
+}
+
+.thread-note small {
+  margin-left: auto;
+  color: #8a857d;
+  font-size: 10px;
+}
+
+.thread-note em {
+  display: block;
+  margin: 0 0 8px;
+  color: #77726a;
+  font-family: Georgia, 'Songti SC', serif;
+  font-size: 12px;
+  font-style: normal;
+  line-height: 1.6;
+}
+
+.thread-note p {
+  margin: 0;
+  color: #24211d;
+  font-size: 14px;
+  line-height: 1.75;
+}
