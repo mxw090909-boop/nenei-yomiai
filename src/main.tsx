@@ -157,7 +157,7 @@ function HomePage({ setPage, book }: { setPage: (page: Page) => void; book?: Boo
       </div>
       <section className='section-block'>
         <h2>最近的页边</h2>
-        <p className='empty-copy'>批注会从 VPS 同步到这里。</p>
+        <p className='empty-copy'>来写下第一条想法吧</p>
       </section>
     </main>
   );
@@ -285,7 +285,7 @@ function NotesPage({ book, annotations }: { book?: Book; annotations: Annotation
           </footer>
         </article>
       ))}
-      {!annotations.length && <p className='empty-copy'>还没有批注。之后我/GPT 会通过 MCP 写到这里。</p>}
+      {!annotations.length && <p className='empty-copy'>还没有批注。</p>}
     </main>
   );
 }
