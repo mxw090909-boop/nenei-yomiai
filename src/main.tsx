@@ -219,48 +219,139 @@ function ShelfPage({ books, selectedBookId, onSelectBook, onImport, importing }:
   );
 }
 
-function ReaderPage({ book, chapter, chapterIndex, setChapterIndex, selectedFont, paragraphIndex, setParagraphIndex }: {
+function ReaderPage({ book, chapter, chapters, chapterIndex, setChapterIndex, selectedFont, fontSize, setFontSize, paragraphIndex, setParagraphIndex, setPage, onAddAnnotation }: {
   book?: Book;
   chapter?: Chapter;
+  chapters: Pick<Chapter, 'chapterIndex' | 'title' | 'paragraphs'>[];
   chapterIndex: number;
   setChapterIndex: (index: number) => void;
   selectedFont: string;
+  fontSize: number;
+  setFontSize: (size: number) => void;
   paragraphIndex?: number;
-  setParagraphIndex: (index: number) => void;
+  setParagraphIndex: (index?: number) => void;
+  setPage: (page: Page) => void;
+  onAddAnnotation: (text: string, quote?: string, paragraphIndex?: number) => Promise<void>;
 }) {
+  const screenRef = useRef<HTMLElement>(null);
+  const [search, setSearch] = useState('');
+  const [draft, setDraft] = useState('');
+  const [composerOpen, setComposerOpen] = useState(false);
+  const searchResults = useMemo(() => {
+    const keyword = search.trim();
+    if (!keyword) return [];
+    return chapters.flatMap((item) => item.paragraphs
+      .map((text, index) => ({ chapterIndex: item.chapterIndex, title: item.title, paragraphIndex: index, text }))
+      .filter((item) => item.text.includes(keyword) || item.title.includes(keyword)))
+      .slice(0, 20);
+  }, [chapters, search]);
+
+  useEffect(() => {
+    if (paragraphIndex == null) {
+      screenRef.current?.scrollTo({ top: 0 });
+      return;
+    }
+    window.setTimeout(() => {
+      document.getElementById(`paragraph-${chapterIndex}-${paragraphIndex}`)?.scrollIntoView({ block: 'center' });
+    }, 80);
+  }, [chapterIndex, paragraphIndex]);
+
   if (!book) {
     return <main className='screen reader-screen'><p className='empty-copy'>先去书架导入一本书。</p></main>;
   }
 
+  const goChapter = (index: number, nextParagraph?: number) => {
+    setParagraphIndex(nextParagraph);
+    setChapterIndex(Math.min(book.chapterCount, Math.max(1, index)));
+  };
+
+  const selectedQuote = paragraphIndex != null && paragraphIndex >= 0 ? chapter?.paragraphs[paragraphIndex] : undefined;
+
   return (
-    <main className='screen reader-screen'>
+    <main className='screen reader-screen' ref={screenRef}>
       <div className='reader-top'>
-        <button disabled={chapterIndex <= 1} onClick={() => setChapterIndex(chapterIndex - 1)}>‹</button>
+        <button disabled={chapterIndex <= 1} onClick={() => goChapter(chapterIndex - 1)}>‹</button>
         <div>
-          <button>{chapterIndex} / {book.chapterCount}</button>
-          <button disabled={chapterIndex >= book.chapterCount} onClick={() => setChapterIndex(chapterIndex + 1)}>›</button>
+          <button onClick={() => setPage('toc')}>目录</button>
+          <button disabled={chapterIndex >= book.chapterCount} onClick={() => goChapter(chapterIndex + 1)}>›</button>
         </div>
       </div>
-      <article className='reading-paper' style={selectedFont ? { fontFamily: selectedFont } : undefined}>
+      <section className='reader-tools'>
+        <label className='reader-search'>
+          <span>搜索</span>
+          <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder='输入书中内容' />
+        </label>
+        <div className='reader-type-tools'>
+          <button onClick={() => setFontSize(Math.max(14, fontSize - 1))}>A-</button>
+          <strong>{fontSize}</strong>
+          <button onClick={() => setFontSize(Math.min(28, fontSize + 1))}>A+</button>
+          <button onClick={() => setComposerOpen((value) => !value)}>批注</button>
+        </div>
+        {!!searchResults.length && (
+          <div className='search-results'>
+            {searchResults.map((result) => (
+              <button key={`${result.chapterIndex}-${result.paragraphIndex}`} onClick={() => {
+                goChapter(result.chapterIndex, result.paragraphIndex);
+                setSearch('');
+              }}>
+                <strong>{result.title}</strong>
+                <span>{result.text.slice(0, 54)}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </section>
+      {composerOpen && (
+        <section className='annotation-composer'>
+          <small>{selectedQuote ? `引用：${selectedQuote.slice(0, 42)}` : '点选正文段落后可绑定批注位置'}</small>
+          <textarea value={draft} onChange={(event) => setDraft(event.target.value)} placeholder='写一条页边批注' />
+          <div>
+            <button onClick={() => setComposerOpen(false)}>取消</button>
+            <button className='solid-button' disabled={!draft.trim()} onClick={async () => {
+              await onAddAnnotation(draft, selectedQuote, paragraphIndex != null && paragraphIndex >= 0 ? paragraphIndex : undefined);
+              setDraft('');
+              setComposerOpen(false);
+            }}>保存</button>
+          </div>
+        </section>
+      )}
+      <article
+        className='reading-paper'
+        style={{
+          ...(selectedFont ? { fontFamily: selectedFont } : {}),
+          '--reader-font-size': `${fontSize}px`,
+        } as React.CSSProperties}
+      >
         <p className='chapter'>第 {chapterIndex} 章</p>
         <h1>{chapter?.title || book.title}</h1>
         <div className='ornament'>✦</div>
         {(chapter?.paragraphs || []).map((text, index) => (
-          <p key={`${chapterIndex}-${index}`} className={index === paragraphIndex ? 'with-note' : ''} onClick={() => setParagraphIndex(index)}>
+          <p id={`paragraph-${chapterIndex}-${index}`} key={`${chapterIndex}-${index}`} className={index === paragraphIndex ? 'with-note' : ''} onClick={() => setParagraphIndex(index)}>
             {text}
           </p>
         ))}
       </article>
       <div className='reader-progress'>
-        <span>{book.progress}%</span>
-        <div><span style={{ width: `${book.progress}%` }} /></div>
-        <span>{chapter?.title || '读取中'}</span>
+        <div className='progress-meta'>
+          <span>{book.progress}%</span>
+          <span>{chapter?.title || '读取中'}</span>
+        </div>
+        <input
+          aria-label='阅读进度'
+          className='progress-slider'
+          type='range'
+          min='1'
+          max={book.chapterCount}
+          value={chapterIndex}
+          onChange={(event) => goChapter(Number(event.target.value))}
+        />
       </div>
     </main>
   );
 }
 
-function NotesPage({ book, annotations }: { book?: Book; annotations: Annotation[] }) {
+function NotesPage({ book, annotations, chapterIndex, onAddAnnotation }: { book?: Book; annotations: Annotation[]; chapterIndex: number; onAddAnnotation: (text: string) => Promise<void> }) {
+  const [draft, setDraft] = useState('');
   return (
     <main className='screen notes-screen'>
       <div className='screen-title inline'>
@@ -270,6 +361,15 @@ function NotesPage({ book, annotations }: { book?: Book; annotations: Annotation
         </div>
         <button className='text-button'>筛选</button>
       </div>
+      <section className='annotation-composer compact-composer'>
+        <textarea value={draft} onChange={(event) => setDraft(event.target.value)} placeholder={`给第 ${chapterIndex} 章添加批注`} />
+        <div>
+          <button className='solid-button' disabled={!draft.trim()} onClick={async () => {
+            await onAddAnnotation(draft);
+            setDraft('');
+          }}>保存批注</button>
+        </div>
+      </section>
       {annotations.map((annotation) => (
         <article className='note-card' key={annotation.id}>
           <div className='note-head'>
@@ -441,6 +541,7 @@ function App() {
   const [importing, setImporting] = useState(false);
   const [fonts, setFonts] = useState<StoredFont[]>([]);
   const [selectedFont, setSelectedFontState] = useState(localStorage.getItem('nenei-yomiai-font') || '');
+  const [fontSize, setFontSizeState] = useState(Number(localStorage.getItem('nenei-yomiai-font-size') || '18'));
 
   const selectedBook = books.find((book) => book.id === selectedBookId) || books[0];
   const style = useMemo(() => ({ '--accent': accent } as React.CSSProperties), [accent]);
@@ -448,6 +549,11 @@ function App() {
   const setSelectedFont = (value: string) => {
     setSelectedFontState(value);
     localStorage.setItem('nenei-yomiai-font', value);
+  };
+
+  const setFontSize = (value: number) => {
+    setFontSizeState(value);
+    localStorage.setItem('nenei-yomiai-font-size', String(value));
   };
 
   const refreshBooks = async () => {
@@ -530,6 +636,23 @@ function App() {
     setSelectedFont(family);
   };
 
+  const addAnnotation = async (text: string, quote?: string, targetParagraphIndex?: number) => {
+    if (!selectedBook) return;
+    await api(`/books/${selectedBook.id}/annotations`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chapterIndex,
+        paragraphIndex: targetParagraphIndex,
+        quote,
+        text,
+        author: 'nenei',
+      }),
+    });
+    const data = await api<{ ok: boolean; annotations: Annotation[] }>(`/books/${selectedBook.id}/annotations?chapterIndex=${chapterIndex}`);
+    setAnnotations(data.annotations);
+  };
+
   return (
     <div className='app-shell' style={style}>
       <div className='phone-frame'>
@@ -540,8 +663,8 @@ function App() {
           setChapterIndex(1);
           setPage('reader');
         }} onImport={importBook} importing={importing} />}
-        {page === 'reader' && <ReaderPage book={selectedBook} chapter={chapter} chapterIndex={chapterIndex} setChapterIndex={setChapterIndex} selectedFont={selectedFont} paragraphIndex={paragraphIndex} setParagraphIndex={setParagraphIndex} />}
-        {page === 'notes' && <NotesPage book={selectedBook} annotations={annotations} />}
+        {page === 'reader' && <ReaderPage book={selectedBook} chapter={chapter} chapters={chapters} chapterIndex={chapterIndex} setChapterIndex={setChapterIndex} selectedFont={selectedFont} fontSize={fontSize} setFontSize={setFontSize} paragraphIndex={paragraphIndex} setParagraphIndex={setParagraphIndex} setPage={setPage} onAddAnnotation={addAnnotation} />}
+        {page === 'notes' && <NotesPage book={selectedBook} annotations={annotations} chapterIndex={chapterIndex} onAddAnnotation={addAnnotation} />}
         {page === 'toc' && <TocPage book={selectedBook} chapters={chapters} chapterIndex={chapterIndex} setChapterIndex={setChapterIndex} setPage={setPage} />}
         {page === 'settings' && <SettingsPage elior={elior} nenei={nenei} setElior={setElior} setNenei={setNenei} accent={accent} setAccent={setAccent} fonts={fonts} selectedFont={selectedFont} setSelectedFont={setSelectedFont} onImportFont={importFont} />}
         <BottomNav page={page} setPage={setPage} />
