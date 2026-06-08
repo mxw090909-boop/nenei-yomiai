@@ -67,26 +67,10 @@ function Avatar({ person, muted = false }: { person: Person; muted?: boolean }) 
   return <span className={'avatar avatar-letter ' + (muted ? 'muted' : '')}>{initials(person.name)}</span>;
 }
 
-function Header({ page, setPage, elior, nenei }: { page: Page; setPage: (page: Page) => void; elior: Person; nenei: Person }) {
-  const tabs: { label: string; page: Page }[] = [
-    { label: '首页', page: 'home' },
-    { label: '书架', page: 'shelf' },
-    { label: '阅读', page: 'reader' },
-    { label: '页边', page: 'notes' },
-  ];
-
+function Header({ setPage, elior, nenei }: { setPage: (page: Page) => void; elior: Person; nenei: Person }) {
   return (
     <header className='topbar'>
-      <div>
-        <button className='brand' onClick={() => setPage('home')} aria-label='回到首页'>nenei-yomiai</button>
-        <nav className='tabs' aria-label='主导航'>
-          {tabs.map((tab) => (
-            <button key={tab.page} className={page === tab.page ? 'active' : ''} onClick={() => setPage(tab.page)}>
-              {tab.label}
-            </button>
-          ))}
-        </nav>
-      </div>
+      <button className='brand' onClick={() => setPage('home')} aria-label='回到首页'>nenei-yomiai</button>
       <div className='identity-mini'>
         <Avatar person={elior} />
         <Avatar person={nenei} muted />
@@ -348,7 +332,7 @@ function App() {
   return (
     <div className='app-shell' style={style}>
       <div className='phone-frame'>
-        <Header page={page} setPage={setPage} elior={elior} nenei={nenei} />
+        <Header setPage={setPage} elior={elior} nenei={nenei} />
         {page === 'home' && <HomePage setPage={setPage} elior={elior} nenei={nenei} />}
         {page === 'shelf' && <ShelfPage />}
         {page === 'reader' && <ReaderPage setPage={setPage} />}
