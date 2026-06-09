@@ -7,14 +7,20 @@
   "theme_color": "#fffefa",
   "icons": [
     {
-      "src": "/nenei-yomiai/icon-192.png",
+      "src": "https://i.postimg.cc/bN9B2NCy/IMG-8526.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/nenei-yomiai/apple-touch-icon.png",
+      "src": "https://i.postimg.cc/bN9B2NCy/IMG-8526.png",
       "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "https://i.postimg.cc/bN9B2NCy/IMG-8526.png",
+      "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     }
