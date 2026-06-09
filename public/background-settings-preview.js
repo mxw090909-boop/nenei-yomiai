@@ -46,8 +46,7 @@
         #${CARD_ID} .bg-actions{display:flex;justify-content:flex-end;gap:12px;margin-top:12px}
         #${CARD_ID} .bg-actions button{font-size:13px;color:#3a3631;border-bottom:1px solid var(--accent)}
         .has-yomiai-home-bg .phone-frame::after{content:'';position:absolute;inset:0;pointer-events:none;background-image:linear-gradient(rgba(255,254,250,.70),rgba(255,254,250,.80)),var(--yomiai-home-bg);background-size:cover;background-position:center;filter:grayscale(.18);z-index:0}
-        .has-yomiai-home-bg .topbar,.has-yomiai-home-bg .screen,.has-yomiai-home-bg .bottom-nav{position:relative;z-index:2}
-        .has-yomiai-reader-bg .reader-screen::before{content:'';position:fixed;inset:0;pointer-events:none;background-image:linear-gradient(rgba(255,254,250,.82),rgba(255,254,250,.92)),var(--yomiai-reader-bg);background-size:cover;background-position:center;filter:grayscale(.12);z-index:0}
+        .has-yomiai-reader-bg .reader-screen::before{content:'';position:absolute;inset:0;pointer-events:none;background-image:linear-gradient(rgba(255,254,250,.82),rgba(255,254,250,.92)),var(--yomiai-reader-bg);background-size:cover;background-position:center;filter:grayscale(.12);z-index:0}
         .has-yomiai-reader-bg .reading-paper,.has-yomiai-reader-bg .reader-top,.has-yomiai-reader-bg .reader-tools,.has-yomiai-reader-bg .reader-progress{position:relative;z-index:2}
       `;
       document.head.appendChild(style);
