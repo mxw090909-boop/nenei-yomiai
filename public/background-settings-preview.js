@@ -45,8 +45,8 @@
         #${CARD_ID} input:focus{border-color:var(--accent)}
         #${CARD_ID} .bg-actions{display:flex;justify-content:flex-end;gap:12px;margin-top:12px}
         #${CARD_ID} .bg-actions button{font-size:13px;color:#3a3631;border-bottom:1px solid var(--accent)}
-        .has-yomiai-home-bg .phone-frame::after{content:'';position:absolute;inset:0;pointer-events:none;background-image:linear-gradient(rgba(255,254,250,.70),rgba(255,254,250,.80)),var(--yomiai-home-bg);background-size:cover;background-position:center;filter:grayscale(.18);z-index:0}
-        .has-yomiai-reader-bg .reader-screen::before{content:'';position:absolute;inset:0;pointer-events:none;background-image:linear-gradient(rgba(255,254,250,.82),rgba(255,254,250,.92)),var(--yomiai-reader-bg);background-size:cover;background-position:center;filter:grayscale(.12);z-index:0}
+        .has-yomiai-home-bg .phone-frame:not(.reader-mode)::after{content:'';position:absolute;inset:0;pointer-events:none;background-image:linear-gradient(rgba(255,254,250,.70),rgba(255,254,250,.80)),var(--yomiai-home-bg);background-size:cover;background-position:center;filter:grayscale(.18);z-index:0}
+        .has-yomiai-reader-bg .phone-frame.reader-mode::after{content:'';position:absolute;inset:0;pointer-events:none;background-image:linear-gradient(rgba(255,254,250,.82),rgba(255,254,250,.92)),var(--yomiai-reader-bg);background-size:cover;background-position:center;filter:grayscale(.12);z-index:0}
         .has-yomiai-reader-bg .reading-paper,.has-yomiai-reader-bg .reader-top,.has-yomiai-reader-bg .reader-tools,.has-yomiai-reader-bg .reader-progress{position:relative;z-index:2}
       `;
       document.head.appendChild(style);
@@ -64,7 +64,7 @@
         <div class="settings-head"><h2>背景设置</h2><button class="text-button" type="button" data-bg-reset>恢复默认</button></div>
         <div class="bg-preview-grid">
           <div class="bg-preview-option"><div class="bg-preview-thumb" data-home-thumb></div><strong>主页背景</strong><span>用于书架入口和小房间氛围</span></div>
-          <div class="bg-preview-option"><div class="bg-preview-thumb" data-reader-thumb></div><strong>阅读器背景</strong><span>加米白遮罩，优先保证正文可读</span></div>
+          <div class="bg-preview-option"><div class="bg-preview-thumb" data-reader-thumb></div><strong>阅读器背景</strong><span>固定在阅读页后面，不跟正文滚走</span></div>
         </div>
         <label class="field"><span>主页背景图 URL</span><input data-home-bg placeholder="https://..." /></label>
         <label class="field"><span>阅读器背景图 URL</span><input data-reader-bg placeholder="https://..." /></label>
