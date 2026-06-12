@@ -107,7 +107,7 @@
 
   document.addEventListener('focusin', showChrome, true);
   document.addEventListener('click', (event) => {
-    if (event.target?.closest?.('.topbar, .reader-top, .reader-tools, .reader-selection-bar, .reader-sheet-backdrop')) {
+    if (event.target?.closest?.('.topbar, .reader-top, .reader-tools')) {
       showChrome();
     }
   }, true);
