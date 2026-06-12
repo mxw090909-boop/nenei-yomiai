@@ -20,9 +20,9 @@
     const style = document.createElement('style');
     style.id = 'reader-scroll-meter-style';
     style.textContent = `
-      .reader-scroll-meter{position:absolute;right:5px;top:92px;bottom:30px;width:3px;border-radius:999px;pointer-events:none;z-index:60;opacity:0;transition:opacity .24s ease;background:rgba(255,254,250,.28);box-shadow:0 0 0 1px rgba(60,56,50,.05)}
+      .reader-scroll-meter{position:absolute;right:5px;top:92px;bottom:30px;width:3px;border-radius:999px;pointer-events:none;z-index:60;opacity:0;transition:opacity .24s ease;background:rgba(255,254,250,.18);box-shadow:0 0 0 1px rgba(60,56,50,.025)}
       .reader-scroll-meter.is-visible{opacity:1}
-      .reader-scroll-meter__thumb{position:absolute;left:0;right:0;top:0;height:28px;min-height:28px;border-radius:999px;background:rgba(56,52,46,.42);box-shadow:0 0 0 1px rgba(255,254,250,.45),0 2px 8px rgba(30,28,24,.12);transform:translateY(0)}
+      .reader-scroll-meter__thumb{position:absolute;left:0;right:0;top:0;height:28px;min-height:28px;border-radius:999px;background:rgba(56,52,46,.26);box-shadow:0 0 0 1px rgba(255,254,250,.34),0 2px 6px rgba(30,28,24,.08);transform:translateY(0)}
       .phone-frame:not(.reader-mode) .reader-scroll-meter{display:none}
       @media (min-width:481px){.reader-scroll-meter{right:7px}}
     `;
