@@ -20,9 +20,9 @@
     const style = document.createElement('style');
     style.id = 'reader-scroll-meter-style';
     style.textContent = `
-      .reader-scroll-meter{position:absolute;right:5px;top:92px;bottom:30px;width:3px;border-radius:999px;pointer-events:none;z-index:60;opacity:0;transition:opacity .24s ease;background:rgba(255,254,250,.08);box-shadow:0 0 0 1px rgba(255,255,255,.10);backdrop-filter:blur(8px) saturate(.9);-webkit-backdrop-filter:blur(8px) saturate(.9)}
+      .reader-scroll-meter{position:absolute;right:5px;top:92px;bottom:30px;width:3px;border-radius:999px;pointer-events:none;z-index:60;opacity:0;transition:opacity .24s ease;background:rgba(255,254,250,.11);box-shadow:0 0 0 1px rgba(255,255,255,.14);backdrop-filter:blur(8px) saturate(.9);-webkit-backdrop-filter:blur(8px) saturate(.9)}
       .reader-scroll-meter.is-visible{opacity:1}
-      .reader-scroll-meter__thumb{position:absolute;left:0;right:0;top:0;height:28px;min-height:28px;border-radius:999px;background:rgba(255,254,250,.13);box-shadow:inset 0 0 0 1px rgba(255,255,255,.18),0 1px 4px rgba(30,28,24,.045);backdrop-filter:blur(10px) saturate(.82);-webkit-backdrop-filter:blur(10px) saturate(.82);transform:translateY(0)}
+      .reader-scroll-meter__thumb{position:absolute;left:0;right:0;top:0;height:28px;min-height:28px;border-radius:999px;background:rgba(255,254,250,.18);box-shadow:inset 0 0 0 1px rgba(255,255,255,.24),0 1px 5px rgba(30,28,24,.055);backdrop-filter:blur(10px) saturate(.84);-webkit-backdrop-filter:blur(10px) saturate(.84);transform:translateY(0)}
       .phone-frame:not(.reader-mode) .reader-scroll-meter{display:none}
       @media (min-width:481px){.reader-scroll-meter{right:7px}}
     `;
