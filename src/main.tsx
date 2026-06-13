@@ -59,6 +59,13 @@ type StoredFont = {
   blob: Blob;
 };
 
+type ChapterSummary = Pick<Chapter, 'chapterIndex' | 'title' | 'paragraphs'>;
+
+type DisplayChapter = ChapterSummary & {
+  displayLabel: string;
+  hiddenFromToc: boolean;
+};
+
 const accentPresets = [
   ['墨黑', '#111111'],
   ['旧金', '#9b7b36'],
@@ -111,6 +118,40 @@ function saveLocalProgress(bookId: string, progress: LocalProgress) {
 function calcProgressPercent(chapterIndex: number, chapterCount?: number) {
   if (!chapterCount) return 0;
   return Math.min(100, Math.max(0, Math.round((chapterIndex / chapterCount) * 100)));
+}
+
+const bodyChapterTitlePattern = /^第\s*[一二三四五六七八九十百千万零〇两\d]+\s*[章节回卷部]/;
+const emptyGeneratedChapterPattern = /^第\s*\d+\s*章$/;
+
+function normalizeChapterTitle(title: string) {
+  return title.replace(/\s+/g, ' ').trim();
+}
+
+function getDisplayChapters(chapters: ChapterSummary[]): DisplayChapter[] {
+  let bodyChapterCount = 0;
+
+  return chapters.map((chapter) => {
+    const title = normalizeChapterTitle(chapter.title);
+    const hiddenFromToc = chapter.paragraphs.length === 0 && emptyGeneratedChapterPattern.test(title);
+
+    if (!hiddenFromToc && bodyChapterTitlePattern.test(title)) {
+      bodyChapterCount += 1;
+      return { ...chapter, displayLabel: `第 ${bodyChapterCount} 章`, hiddenFromToc };
+    }
+
+    return {
+      ...chapter,
+      displayLabel: bodyChapterCount === 0 ? '前置' : '附录',
+      hiddenFromToc,
+    };
+  });
+}
+
+function getReaderChapterLabel(chapter: Chapter | undefined, displayChapters: DisplayChapter[]) {
+  if (!chapter) return '读取中';
+  const title = normalizeChapterTitle(chapter.title);
+  if (bodyChapterTitlePattern.test(title) && chapter.paragraphs.length > 0) return title;
+  return displayChapters.find((item) => item.chapterIndex === chapter.chapterIndex)?.displayLabel || title;
 }
 
 function openFontDb() {
@@ -259,7 +300,7 @@ function ShelfPage({ books, selectedBookId, onSelectBook, onImport, importing }:
 function ReaderPage({ book, chapter, chapters, annotations, chapterIndex, setChapterIndex, selectedFont, fontSize, setFontSize, paragraphIndex, setParagraphIndex, setPage, onAddAnnotation }: {
   book?: Book;
   chapter?: Chapter;
-  chapters: Pick<Chapter, 'chapterIndex' | 'title' | 'paragraphs'>[];
+  chapters: ChapterSummary[];
   annotations: Annotation[];
   chapterIndex: number;
   setChapterIndex: (index: number) => void;
@@ -280,6 +321,8 @@ function ReaderPage({ book, chapter, chapters, annotations, chapterIndex, setCha
     paragraphIndex?: number;
     source: 'paragraph' | 'selection';
   } | null>(null);
+  const displayChapters = useMemo(() => getDisplayChapters(chapters), [chapters]);
+  const readerChapterLabel = getReaderChapterLabel(chapter, displayChapters);
 
   const searchResults = useMemo(() => {
     const keyword = search.trim();
@@ -449,7 +492,7 @@ function ReaderPage({ book, chapter, chapters, annotations, chapterIndex, setCha
           '--reader-font-size': `${fontSize}px`,
         } as React.CSSProperties}
       >
-        <p className='chapter'>第 {chapterIndex} 章</p>
+        <p className='chapter'>{readerChapterLabel}</p>
         <h1>{chapter?.title || book.title}</h1>
         <div className='ornament'>✦</div>
         {(chapter?.paragraphs || []).map((text, index) => {
@@ -619,11 +662,16 @@ function NotesPage({ book, annotations, chapterIndex, onAddAnnotation }: { book?
 
 function TocPage({ book, chapters, chapterIndex, setChapterIndex, setPage }: {
   book?: Book;
-  chapters: Pick<Chapter, 'chapterIndex' | 'title' | 'paragraphs'>[];
+  chapters: ChapterSummary[];
   chapterIndex: number;
   setChapterIndex: (index: number) => void;
   setPage: (page: Page) => void;
 }) {
+  const displayChapters = useMemo(
+    () => getDisplayChapters(chapters).filter((chapter) => !chapter.hiddenFromToc),
+    [chapters],
+  );
+
   return (
     <main className='screen toc-screen'>
       <div className='screen-title'>
@@ -632,12 +680,12 @@ function TocPage({ book, chapters, chapterIndex, setChapterIndex, setPage }: {
       </div>
       <div className='toc-progress'><span style={{ width: `${book?.progress || 0}%` }} /></div>
       <section className='chapter-list'>
-        {chapters.map((chapter) => (
+        {displayChapters.map((chapter) => (
           <button key={chapter.chapterIndex} className={chapter.chapterIndex === chapterIndex ? 'current' : ''} onClick={() => {
             setChapterIndex(chapter.chapterIndex);
             setPage('reader');
           }}>
-            <span>第 {chapter.chapterIndex} 章</span>
+            <span>{chapter.displayLabel}</span>
             <strong>{chapter.title}</strong>
             <small>{chapter.paragraphs.length} 段</small>
           </button>
