@@ -5,6 +5,12 @@ import './styles.css';
 const API_BASE = 'https://43-133-253-81.nip.io/yomiai-api';
 const FONT_DB = 'nenei-yomiai-fonts';
 const FONT_STORE = 'fonts';
+const APPEARANCE_DB = 'nenei-yomiai-appearance';
+const APPEARANCE_STORE = 'kv';
+const PERSON_AVATAR_KEYS = {
+  elior: 'nenei-yomiai-elior-avatar',
+  nenei: 'nenei-yomiai-nenei-avatar',
+} as const;
 
 type Page = 'home' | 'shelf' | 'reader' | 'notes' | 'toc' | 'settings';
 type ShelfStatus = '想读' | '正在读' | '已读';
@@ -187,6 +193,42 @@ async function installFont(font: StoredFont) {
   const face = new FontFace(font.family, `url(${URL.createObjectURL(font.blob)})`);
   const loaded = await face.load();
   document.fonts.add(loaded);
+}
+
+function openAppearanceDb() {
+  return new Promise<IDBDatabase>((resolve, reject) => {
+    const request = indexedDB.open(APPEARANCE_DB, 1);
+    request.onupgradeneeded = () => request.result.createObjectStore(APPEARANCE_STORE, { keyPath: 'id' });
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function loadAppearanceValue(key: string) {
+  const db = await openAppearanceDb();
+  return new Promise<string>((resolve, reject) => {
+    const tx = db.transaction(APPEARANCE_STORE, 'readonly');
+    const request = tx.objectStore(APPEARANCE_STORE).get(key);
+    request.onsuccess = () => resolve(typeof request.result?.value === 'string' ? request.result.value : '');
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function saveAppearanceValue(key: string, value: string) {
+  const db = await openAppearanceDb();
+  return new Promise<void>((resolve, reject) => {
+    const tx = db.transaction(APPEARANCE_STORE, 'readwrite');
+    tx.objectStore(APPEARANCE_STORE).put({ id: key, value });
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+function mirrorAvatarToLocalStorage(personKey: Person['key'], avatar: string) {
+  const storageKey = PERSON_AVATAR_KEYS[personKey];
+  const next = avatar.trim();
+  if (next) localStorage.setItem(storageKey, next);
+  else localStorage.removeItem(storageKey);
 }
 
 function Cover({ book, kind = 'botanical' }: { book?: Book; kind?: string }) {
@@ -819,6 +861,7 @@ function App() {
   const [fontSize, setFontSizeState] = useState(Number(localStorage.getItem('nenei-yomiai-font-size') || '18'));
 
   const progressSyncTimer = useRef<number | undefined>(undefined);
+  const avatarHydrated = useRef({ elior: false, nenei: false });
 
   const selectedBook = books.find((book) => book.id === selectedBookId) || books[0];
   const style = useMemo(() => ({ '--accent': accent } as React.CSSProperties), [accent]);
@@ -849,6 +892,46 @@ function App() {
       await Promise.all(items.map(installFont));
     }).catch(console.error);
   }, []);
+
+  useEffect(() => {
+    loadAppearanceValue(PERSON_AVATAR_KEYS.elior)
+      .then((avatar) => {
+        if (avatar) {
+          setElior((current) => ({ ...current, avatar }));
+          mirrorAvatarToLocalStorage('elior', avatar);
+        }
+        avatarHydrated.current.elior = true;
+      })
+      .catch((error) => {
+        avatarHydrated.current.elior = true;
+        console.error(error);
+      });
+
+    loadAppearanceValue(PERSON_AVATAR_KEYS.nenei)
+      .then((avatar) => {
+        if (avatar) {
+          setNenei((current) => ({ ...current, avatar }));
+          mirrorAvatarToLocalStorage('nenei', avatar);
+        }
+        avatarHydrated.current.nenei = true;
+      })
+      .catch((error) => {
+        avatarHydrated.current.nenei = true;
+        console.error(error);
+      });
+  }, []);
+
+  useEffect(() => {
+    if (!avatarHydrated.current.elior) return;
+    saveAppearanceValue(PERSON_AVATAR_KEYS.elior, elior.avatar).catch(console.error);
+    mirrorAvatarToLocalStorage('elior', elior.avatar);
+  }, [elior.avatar]);
+
+  useEffect(() => {
+    if (!avatarHydrated.current.nenei) return;
+    saveAppearanceValue(PERSON_AVATAR_KEYS.nenei, nenei.avatar).catch(console.error);
+    mirrorAvatarToLocalStorage('nenei', nenei.avatar);
+  }, [nenei.avatar]);
 
   useEffect(() => {
     if (!selectedBook) return;
