@@ -378,16 +378,45 @@ function ReaderPage({ book, chapter, chapters, annotations, chapterIndex, setCha
   const annotationsByParagraph = useMemo(() => {
     const map = new Map<number, Annotation[]>();
     const paragraphs = chapter?.paragraphs || [];
+ 
+    const normalizeText = (value?: string) => (value || '').replace(/\s+/g, ' ').trim();
 
     annotations.forEach((annotation) => {
       let targetIndex = annotation.paragraphIndex;
+      const cleanQuote = normalizeText(annotation.quote);
 
-      if ((targetIndex == null || !Number.isFinite(targetIndex)) && annotation.quote) {
-        const cleanQuote = annotation.quote.replace(/\s+/g, ' ').trim();
-        targetIndex = paragraphs.findIndex((paragraph) => paragraph.replace(/\s+/g, ' ').includes(cleanQuote));
+      if (cleanQuote) {
+        const indexedParagraph =
+          targetIndex != null && Number.isFinite(targetIndex) && targetIndex >= 0
+            ? paragraphs[targetIndex]
+            : undefined;
+
+        const indexedContainsQuote = indexedParagraph
+          ? normalizeText(indexedParagraph).includes(cleanQuote)
+          : false;
+
+        if (!indexedContainsQuote) {
+          const quoteMatchedIndex = paragraphs.findIndex((paragraph) =>
+            normalizeText(paragraph).includes(cleanQuote),
+          );
+
+          if (quoteMatchedIndex >= 0) {
+            targetIndex = quoteMatchedIndex;
+          } else if (targetIndex == null || !Number.isFinite(targetIndex) || targetIndex < 0) {
+            return;
+          }
+        }
       }
 
-      if (targetIndex == null || !Number.isFinite(targetIndex) || targetIndex < 0) return;
+      if (
+        targetIndex == null ||
+        !Number.isFinite(targetIndex) ||
+        targetIndex < 0 ||
+        targetIndex >= paragraphs.length
+      ) {
+        return;
+      }
+
       map.set(targetIndex, [...(map.get(targetIndex) || []), annotation]);
     });
 
