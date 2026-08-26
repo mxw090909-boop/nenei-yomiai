@@ -15,3 +15,9 @@ npm run dev
 - 设置内自定义主题色
 
 后续再接 EPUB、VPS 同步与真实批注数据。
+
+## Credits
+
+Created and maintained by **Nenei ([mxw090909-boop](https://github.com/mxw090909-boop))**, with **Elior** as AI collaborator.
+
+Licensed under the [MIT License](LICENSE).
