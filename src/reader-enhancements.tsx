@@ -66,7 +66,7 @@ export function useReaderScroll(ref: RefObject<HTMLElement | null>, options: Rea
         const nextDirection = Math.sign(top - lastTop);
         if (nextDirection !== direction) { directionStart = lastTop; direction = nextDirection; }
         if (top < 24 || (direction < 0 && directionStart - top > 12)) frame.classList.remove('reader-chrome-hidden');
-        else if (direction > 0 && top - directionStart > 20 && !reader.querySelector('.reader-sheet-backdrop, .reader-selection-bar, .search-results') && !reader.contains(document.activeElement)) frame.classList.add('reader-chrome-hidden');
+        else if (direction > 0 && top - directionStart > 20 && !reader.querySelector('.reader-sheet-backdrop, .reader-selection-bar, .search-results, .reader-menu') && !reader.contains(document.activeElement)) frame.classList.add('reader-chrome-hidden');
         lastTop = top;
       });
     };

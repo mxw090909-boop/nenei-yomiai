@@ -5,6 +5,13 @@ import { JSDOM } from 'jsdom';
 const dom = new JSDOM('<div id="root"></div>', { url: 'https://reader.test/nenei-yomiai/', pretendToBeVisual: true, runScripts: 'outside-only' });
 const w = dom.window;
 const calls = [];
+let clock = Date.now();
+w.Date.now = () => clock;
+w.document.hasFocus = () => true;
+const realInterval = w.setInterval.bind(w);
+let timeTick;
+w.setInterval = (fn,ms,...args) => { if(ms===10000) timeTick=fn; return realInterval(fn,ms,...args); };
+const recordedTime = () => Object.values(JSON.parse(w.localStorage.getItem('yomiai-reading-time') || '{}')).reduce((sum,day)=>sum+(day['test-book'] || 0),0);
 const progress = [{ bookId:'test-book', chapterIndex:2, paragraphIndex:5, percent:40, updatedAt:'2026-09-20T10:00:00Z' }];
 let failSave = false, releaseSave;
 const notes = [
@@ -47,13 +54,27 @@ const until=async(fn)=>{for(let i=0;i<100;i++){if(fn())return;await delay(20);}t
 const button=text=>[...w.document.querySelectorAll('button')].find(b=>b.textContent.trim()===text);
 const click=async(text)=>{assert.ok(button(text),'button '+text);button(text).click();await delay(40);};
 const input=(el,value)=>{const proto=el.tagName==='TEXTAREA'?w.HTMLTextAreaElement.prototype:w.HTMLInputElement.prototype;Object.getOwnPropertyDescriptor(proto,'value').set.call(el,value);el.dispatchEvent(new w.Event('input',{bubbles:true}));};
-await until(()=>button('继续阅读') && w.document.querySelector('.recent-note'));
-assert.ok(w.document.body.textContent.includes('第二章的留言'));
+await until(()=>button('继续阅读') && w.document.querySelector('.quote-open'));
+assert.equal(w.document.querySelector('.recent-note'),null);
+const daily = w.localStorage.getItem('yomiai-daily-test-book');
+assert.equal(JSON.parse(w.localStorage.getItem('yomiai-farthest-test-book')).paragraphIndex,5);
+assert.ok(daily);
+assert.ok(!w.document.body.textContent.includes('第二章的留言'));
+w.document.querySelector('.quote-open').click();await delay(40);
+assert.ok(w.document.querySelector('.daily-sheet .thread-note'));
+w.document.querySelector('[aria-label="关闭页边"]').click();await delay(40);
 assert.ok(!w.document.body.textContent.includes('未来章节不应出现在首页'));
 assert.equal(calls.filter(c=>c.method==='PUT').length,0,'home must not overwrite remote progress');
 await click('继续阅读'); await until(()=>w.document.querySelector('#paragraph-2-5')); await delay(100);
 let reader=w.document.querySelector('.reader-screen');
 assert.equal(reader.scrollTop,616,'newer server bookmark restored');
+clock+=10000;timeTick();assert.equal(recordedTime(),10000,'foreground reading counts');
+w.dispatchEvent(new w.Event('blur'));clock+=10000;timeTick();assert.equal(recordedTime(),10000,'background reading pauses');
+w.dispatchEvent(new w.Event('focus'));
+for(let i=0;i<20;i++){clock+=10000;timeTick();}
+assert.equal(recordedTime(),190000,'idle reading stops after three minutes');
+w.document.dispatchEvent(new w.Event('pointerdown'));clock+=10000;timeTick();assert.equal(recordedTime(),200000,'activity resumes timer');
+clock+=120000;timeTick();assert.equal(recordedTime(),200000,'suspended scheduling gap is excluded');
 assert.equal(calls.filter(c=>c.path.endsWith('/chapters')).length,0,'reading does not eagerly download the full book');
 // Pointer down then scrolling must never snap back to the pre-gesture position.
 w.document.querySelector('#paragraph-2-5').dispatchEvent(new w.Event('pointerdown',{bubbles:true}));
@@ -80,15 +101,17 @@ failSave=false; const beforePosts=calls.filter(c=>c.method==='POST').length;
 button('保存').click();button('保存').click();await delay(50);
 assert.equal(calls.filter(c=>c.method==='POST').length,beforePosts+1,'double click sends once');
 releaseSave();await delay(60);assert.equal(w.document.querySelector('.reader-annotation-sheet'),null);
-await click('搜索');assert.ok(w.document.querySelector('.reader-search input'));
+w.document.querySelector('[aria-label="阅读菜单"]').click();await delay(40);await click('搜索');assert.ok(w.document.querySelector('.reader-search input'));
 input(w.document.querySelector('.reader-search input'),'正文 88');await delay(40);
 assert.ok(w.document.querySelector('.search-results button'),'search returns results');
-await click('nenei-yomiai');await click('继续阅读');await delay(100);
+w.document.querySelector('[aria-label="回到首页"]').click();await delay(40);
+assert.equal(w.localStorage.getItem('yomiai-daily-test-book'),daily,'daily quote survives returning home');
+await click('继续阅读');await delay(100);
 reader=w.document.querySelector('.reader-screen');assert.equal(reader.scrollTop,1816,'returning resumes last scroll');
-await click('nenei-yomiai');
+w.document.querySelector('[aria-label="回到首页"]').click();await delay(40);
 const nav=[...w.document.querySelectorAll('.bottom-nav button')].find(b=>b.textContent.includes('页边'));nav.click();await delay(50);
 assert.equal(w.document.querySelectorAll('.note-card').length,4,'notes cover the whole book');
-assert.ok(w.document.querySelector('[aria-label="章节批注"]'),'chapter note composer preserved');
+assert.equal(w.document.querySelector('[aria-label="章节批注"]'),null,'notes page is for revisiting');
 const select=w.document.querySelector('[aria-label="批注作者"]');select.value='nenei';select.dispatchEvent(new w.Event('change',{bubbles:true}));await delay(40);
 assert.equal(w.document.querySelectorAll('.note-card').length,1,'author filter works');
 notes.push({id:'new',bookId:'test-book',chapterIndex:2,paragraphIndex:30,quote:'正文 30',text:'刚刚写下的新留言',author:'ai',createdAt:new Date().toISOString()});
@@ -97,9 +120,20 @@ select.value='unread';select.dispatchEvent(new w.Event('change',{bubbles:true}))
 assert.ok(w.document.querySelector('.note-card').textContent.includes('刚刚写下的新留言'));
 assert.equal(w.document.querySelectorAll('.note-card').length,1,'old notes are not all marked new');
 await click('nenei-yomiai');
+assert.equal(JSON.parse(w.localStorage.getItem('yomiai-farthest-test-book')).paragraphIndex,17,'quote selection does not advance farthest read position');
 const shelf=[...w.document.querySelectorAll('.bottom-nav button')].find(b=>b.textContent.includes('书架'));shelf.click();await delay(40);
 const status=w.document.querySelector('[aria-label="书籍状态"]');status.value='已读';status.dispatchEvent(new w.Event('change',{bubbles:true}));await delay(60);
 assert.equal(JSON.parse(calls.filter(c=>c.method==='PUT').at(-1).body).status,'已读');
 assert.equal(JSON.parse(calls.filter(c=>c.method==='PUT').at(-1).body).percent,100);
-console.log('PASS: remote restore, no startup writes, smooth gesture, scroll bookmark, selection isolation, per-quote drafts, failed-save recovery, duplicate guard, search, return-to-reading, whole-book notes, filters, new-note refresh.');
+notes.splice(0,notes.length,
+{id:'paired-ai',bookId:'test-book',chapterIndex:2,paragraphIndex:5,quote:'我们都标过的句子',text:'他的留言',author:'ai',createdAt:new Date().toISOString()},
+{id:'paired-me',bookId:'test-book',chapterIndex:2,paragraphIndex:5,quote:'我们都标过的句子',text:'她的留言',author:'nenei',createdAt:new Date().toISOString()},
+{id:'unread-paragraph',bookId:'test-book',chapterIndex:2,paragraphIndex:18,quote:'同章还没读到的句子',text:'不该展示',author:'ai',createdAt:new Date().toISOString()});
+w.dispatchEvent(new w.Event('focus'));await delay(60);await click('nenei-yomiai');
+assert.equal(w.document.querySelector('.quote-open blockquote').textContent,'我们都标过的句子');
+assert.equal(button('换一句'),undefined,'duplicate quotations are one candidate');
+w.document.querySelector('.quote-open').click();await delay(40);
+assert.equal(w.document.querySelectorAll('.daily-sheet .thread-note').length,2,'both authors appear in quote thread');
+assert.ok(!w.document.querySelector('.daily-sheet').textContent.includes('不该展示'));
+console.log('PASS: reading timer, idle/background/suspend pause, daily quote persistence, paragraph cutoff, deduplication and paired notes; remote restore, no startup writes, smooth gesture, scroll bookmark, selection isolation, per-quote drafts, failed-save recovery, duplicate guard, search, return-to-reading, whole-book notes, filters, new-note refresh.');
 dom.window.close();

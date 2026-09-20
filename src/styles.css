@@ -990,3 +990,46 @@ h1, h2, h3, p { margin: 0; }
 .phone-frame:not(.reader-mode) .screen{top:64px;padding-top:12px}
 .screen-title{margin-bottom:14px}
 .screen-title h1{font-size:30px}
+
+/* The shared reading room: paper, restrained rules, and space around words. */
+.phone-frame{color:#302d28;background:#fffefa}
+.phone-frame::before{opacity:.10}
+.topbar{border-bottom:0}
+.home-screen .hero-card{border:0;box-shadow:none;background:none;padding:24px 0 20px;grid-template-columns:108px 1fr;gap:24px;align-items:center}
+.home-screen .hero-card .cover{width:108px;height:152px;border:0;filter:none;box-shadow:3px 6px 16px #302d2820;border-radius:2px}
+.home-screen .hero-copy h1{font-size:27px;line-height:1.35}
+.home-screen .eyebrow{font-size:10px;letter-spacing:.16em;margin-bottom:10px}
+.home-screen .hero-copy p:not(.eyebrow){font-size:12px;line-height:1.6}
+.home-screen .progress{height:2px;margin:18px 0 10px;background:#e9e4da}
+.home-screen .hero-copy small{color:#827a6e;font-size:11px}
+.continue-book{display:block;width:100%;padding:14px;border:1px solid #cfc7b8;background:var(--accent);color:#fffefa;font-size:14px;border-radius:4px}
+.reading-time{text-align:center;padding:12px 0 22px;color:#877e71;font-size:12px}
+.reading-time>button{padding:8px;color:inherit;font-size:12px}
+.time-detail{text-align:left;padding:16px;background:#f6f3ec;border-radius:4px;margin-top:8px}
+.time-detail>p{margin-bottom:14px;color:#514a40}
+.time-detail small{display:block;margin-top:12px;font-size:10px}
+.time-day{display:flex;justify-content:space-between;line-height:2}
+.daily-quote{border-top:1px solid #e5dfd3;padding:22px 0 24px}
+.daily-heading{display:flex;align-items:center;justify-content:space-between;color:#968974;font-size:11px;letter-spacing:.12em}
+.daily-heading button{padding:8px;font-size:11px;color:#8a8173;letter-spacing:0}
+.quote-open{display:block;width:100%;text-align:left;padding:4px 0 0}
+.quote-open blockquote{font-family:Georgia,'Songti SC',serif;font-size:20px;line-height:1.85;margin:18px 0;color:#494236;white-space:pre-line}
+.quote-open>span{display:block;font-size:11px;color:#928777;text-align:right;line-height:1.8}
+.daily-sheet blockquote{margin:16px 0;padding-left:14px;border-left:2px solid #d4c6af;line-height:1.8;color:#7d7160}
+.daily-sheet .thread-note p{line-height:1.8;margin-top:8px}
+.note-card,.settings-card,.pair-card{box-shadow:none;background:transparent;border:0}
+.note-card{padding:20px 0;border-bottom:1px solid #e9e2d6}
+.note-card .note-head{font-size:12px;color:#8a7e6c}
+.note-card>p{font-family:Georgia,'Songti SC',serif;line-height:1.9;font-size:16px}
+.note-card footer{font-size:10px;color:#9a9080;flex-wrap:wrap}
+.note-filter-panel>summary,.settings-group>summary,.appearance-more>summary{cursor:pointer;color:#796e5e;font-size:13px;padding:14px 0}
+.settings-group{border-top:1px solid #e6dfd2}
+.settings-group .settings-card{padding:12px 0}
+.settings-group h2{font-size:14px}
+.appearance-more>summary{font-size:12px}
+.chapter-navigation{display:flex;justify-content:space-between;padding:30px 4px 12px;border-top:1px solid #e8e1d5;margin-top:28px}
+.chapter-navigation button{padding:12px;font-size:13px;color:#776a58}
+.chapter-navigation button:disabled{opacity:.25}
+.reader-progress{position:static;background:none;border:0;padding:8px 8px 24px}
+.progress-slider{display:none}
+@media(max-width:360px){.home-screen .hero-card{gap:16px;grid-template-columns:90px 1fr}.home-screen .hero-card .cover{width:90px;height:132px}.home-screen .hero-copy h1{font-size:24px}}
