@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import './styles.css';
+import { useReaderScroll, BackgroundSettings, useBackgrounds } from './reader-enhancements';
 
 const API_BASE = 'https://43-133-253-81.nip.io/yomiai-api';
 const FONT_DB = 'nenei-yomiai-fonts';
@@ -56,6 +57,9 @@ type LocalProgress = {
   paragraphIndex?: number;
   percent: number;
   updatedAt: number;
+  paragraphOffset?: number;
+  pending?: boolean;
+  status?: ShelfStatus;
 };
 
 type StoredFont = {
@@ -110,6 +114,9 @@ function loadLocalProgress(bookId: string): LocalProgress | undefined {
       chapterIndex: Math.max(1, Math.round(parsed.chapterIndex)),
       paragraphIndex: typeof parsed.paragraphIndex === 'number' ? parsed.paragraphIndex : undefined,
       percent: typeof parsed.percent === 'number' ? Math.min(100, Math.max(0, Math.round(parsed.percent))) : 0,
+      paragraphOffset: parsed.paragraphOffset,
+      pending: parsed.pending,
+      status: parsed.status,
       updatedAt: typeof parsed.updatedAt === 'number' ? parsed.updatedAt : 0,
     };
   } catch {
@@ -258,7 +265,7 @@ function Header({ setPage, elior, nenei }: { setPage: (page: Page) => void; elio
   );
 }
 
-function HomePage({ setPage, book }: { setPage: (page: Page) => void; book?: Book }) {
+function HomePage({ setPage, book, notes, onOpen, isUnread }: { setPage: (page: Page) => void; book?: Book; notes: Annotation[]; onOpen: (note: Annotation) => void; isUnread: (note: Annotation) => boolean }) {
   return (
     <main className='screen home-screen'>
       <section className='hero-card'>
@@ -272,23 +279,26 @@ function HomePage({ setPage, book }: { setPage: (page: Page) => void; book?: Boo
         </div>
       </section>
       <div className='quick-actions'>
+        <button onClick={() => setPage('reader')}>继续阅读</button>
         <button onClick={() => setPage('toc')}>目录</button>
-        <button onClick={() => setPage('notes')}>页边</button>
+        <button onClick={() => setPage('notes')}>页边{notes.some(isUnread) ? ` · ${notes.filter(isUnread).length} 条未读` : ''}</button>
       </div>
       <section className='section-block'>
         <h2>最近的页边</h2>
-        <p className='empty-copy'>来写下第一条想法吧</p>
+        {notes.slice(0, 5).map(note => <button className='recent-note' key={note.id} onClick={() => onOpen(note)}><strong>{note.author === 'ai' ? 'Elior' : 'Nenei'}{isUnread(note) ? ' · 未读' : ''}</strong>{note.quote && <blockquote>{note.quote}</blockquote>}<p>{note.text}</p><small>第 {note.chapterIndex} 章 · 回到原文</small></button>)}
+        {!notes.length && <p className='empty-copy'>来写下第一条想法吧</p>}
       </section>
     </main>
   );
 }
 
-function ShelfPage({ books, selectedBookId, onSelectBook, onImport, importing }: {
+function ShelfPage({ books, selectedBookId, onSelectBook, onImport, importing, onStatus }: {
   books: Book[];
   selectedBookId?: string;
   onSelectBook: (bookId: string) => void;
   onImport: (file: File) => void;
   importing: boolean;
+  onStatus: (status: ShelfStatus) => void;
 }) {
   const [status, setStatus] = useState<ShelfStatus>('正在读');
   const inputRef = useRef<HTMLInputElement>(null);
@@ -321,6 +331,7 @@ function ShelfPage({ books, selectedBookId, onSelectBook, onImport, importing }:
           <button key={item} className={status === item ? 'active' : ''} onClick={() => setStatus(item)}>{item}</button>
         ))}
       </div>
+      {selectedBookId && <label className='field'><span>《{books.find(book => book.id === selectedBookId)?.title}》的状态</span><select aria-label='书籍状态' value={books.find(book => book.id === selectedBookId)?.status || '正在读'} onChange={e => onStatus(e.target.value as ShelfStatus)}>{(['想读', '正在读', '已读'] as ShelfStatus[]).map(value => <option key={value}>{value}</option>)}</select></label>}
       <section className='book-list'>
         {filtered.map((book) => (
           <button className={'book-row ' + (book.id === selectedBookId ? 'selected' : '')} key={book.id} onClick={() => onSelectBook(book.id)}>
@@ -339,7 +350,11 @@ function ShelfPage({ books, selectedBookId, onSelectBook, onImport, importing }:
   );
 }
 
-function ReaderPage({ book, chapter, chapters, annotations, chapterIndex, setChapterIndex, selectedFont, fontSize, setFontSize, paragraphIndex, setParagraphIndex, setPage, onAddAnnotation }: {
+function ReaderPage({ book, chapter, chapters, annotations, chapterIndex, setChapterIndex, selectedFont, fontSize, setFontSize, paragraphIndex, setParagraphIndex, setPage, onAddAnnotation, onPosition, initialOffset, onReadNotes, onLoadChapters }: {
+  onPosition: (paragraph: number, offset: number, fraction: number) => void;
+  initialOffset?: number;
+  onReadNotes: (notes: Annotation[]) => void;
+  onLoadChapters: () => void;
   book?: Book;
   chapter?: Chapter;
   chapters: ChapterSummary[];
@@ -356,13 +371,18 @@ function ReaderPage({ book, chapter, chapters, annotations, chapterIndex, setCha
 }) {
   const screenRef = useRef<HTMLElement>(null);
   const [search, setSearch] = useState('');
-  const [draft, setDraft] = useState('');
+  const [searchOpen, setSearchOpen] = useState(false);
+  const draftKey = `yomiai-draft-${book?.id}-${chapterIndex}`;
+  const [draft, setDraft] = useState(() => { try { return JSON.parse(localStorage.getItem(draftKey) || '{}').text || ''; } catch { return ''; } });
+  const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
+  const [saveError, setSaveError] = useState('');
   const [composerOpen, setComposerOpen] = useState(false);
   const [annotationTarget, setAnnotationTarget] = useState<{
     quote: string;
     paragraphIndex?: number;
     source: 'paragraph' | 'selection';
-  } | null>(null);
+  } | null>(() => { try { return JSON.parse(localStorage.getItem(draftKey) || '{}').target || null; } catch { return null; } });
   const displayChapters = useMemo(() => getDisplayChapters(chapters), [chapters]);
   const readerChapterLabel = getReaderChapterLabel(chapter, displayChapters);
 
@@ -429,23 +449,26 @@ function ReaderPage({ book, chapter, chapters, annotations, chapterIndex, setCha
     annotations: Annotation[];
   } | null>(null);
 
-  useEffect(() => {
-    if (paragraphIndex == null) {
-      screenRef.current?.scrollTo({ top: 0 });
-      return;
+  const capturePosition = useReaderScroll(screenRef, { chapterKey: `${book?.id}-${chapterIndex}`, paragraphIndex, initialOffset, fontSize, onPosition });
+  const chooseTarget = (target: NonNullable<typeof annotationTarget>) => {
+    const key = `${draftKey}-${target.paragraphIndex ?? "chapter"}-${encodeURIComponent(target.quote)}`;
+    setDraft(localStorage.getItem(key) || '');
+    setAnnotationTarget(target); setSaveError('');
+  };
+  const updateDraft = (text: string) => {
+    setDraft(text);
+    if (!annotationTarget) return;
+    const key = `${draftKey}-${annotationTarget.paragraphIndex ?? "chapter"}-${encodeURIComponent(annotationTarget.quote)}`;
+    if (text.trim()) {
+      localStorage.setItem(key, text);
+      localStorage.setItem(draftKey, JSON.stringify({ text, target: annotationTarget }));
+    } else {
+      localStorage.removeItem(key); localStorage.removeItem(draftKey);
     }
-    window.setTimeout(() => {
-      document.getElementById(`paragraph-${chapterIndex}-${paragraphIndex}`)?.scrollIntoView({ block: 'center' });
-    }, 80);
-  }, [chapterIndex, paragraphIndex]);
-
+  };
   useEffect(() => {
-    setAnnotationTarget(null);
-    setThreadTarget(null);
-    setDraft('');
-    setComposerOpen(false);
-  }, [chapterIndex]);
-
+    setThreadTarget(current => current ? { ...current, annotations: annotationsByParagraph.get(current.paragraphIndex) || [] } : null);
+  }, [annotationsByParagraph]);
   if (!book) {
     return <main className='screen reader-screen'><p className='empty-copy'>先去书架导入一本书。</p></main>;
   }
@@ -470,10 +493,7 @@ function ReaderPage({ book, chapter, chapters, annotations, chapterIndex, setCha
     const nextParagraphIndex = paragraphElement?.getAttribute('data-paragraph-index');
     const parsedParagraphIndex = nextParagraphIndex == null ? undefined : Number(nextParagraphIndex);
 
-    if (parsedParagraphIndex != null && Number.isFinite(parsedParagraphIndex)) {
-      setParagraphIndex(parsedParagraphIndex);
-    }
-    setAnnotationTarget({
+    chooseTarget({
       quote,
       paragraphIndex: parsedParagraphIndex != null && Number.isFinite(parsedParagraphIndex) ? parsedParagraphIndex : paragraphIndex,
       source: 'selection',
@@ -483,8 +503,8 @@ function ReaderPage({ book, chapter, chapters, annotations, chapterIndex, setCha
 
   const openAnnotationThread = (index: number, text: string) => {
     const existing = annotationsByParagraph.get(index) || [];
-    setParagraphIndex(index);
-    setAnnotationTarget({ quote: text, paragraphIndex: index, source: 'paragraph' });
+    onReadNotes(existing);
+    chooseTarget({ quote: text, paragraphIndex: index, source: 'paragraph' });
     setThreadTarget({ quote: text, paragraphIndex: index, annotations: existing });
     setComposerOpen(false);
   };
@@ -497,9 +517,8 @@ function ReaderPage({ book, chapter, chapters, annotations, chapterIndex, setCha
       openAnnotationThread(index, text);
       return;
     }
-    setParagraphIndex(index);
     setThreadTarget(null);
-    setAnnotationTarget({ quote: text, paragraphIndex: index, source: 'paragraph' });
+    chooseTarget({ quote: text, paragraphIndex: index, source: 'paragraph' });
     setComposerOpen(false);
   };
 
@@ -507,18 +526,23 @@ function ReaderPage({ book, chapter, chapters, annotations, chapterIndex, setCha
     setAnnotationTarget(null);
     setThreadTarget(null);
     setComposerOpen(false);
-    setDraft('');
     window.getSelection()?.removeAllRanges();
   };
 
   const saveAnnotation = async () => {
-    if (!draft.trim() || !annotationTarget) return;
+    if (!draft.trim() || !annotationTarget || savingRef.current) return;
+    savingRef.current = true; setSaving(true); setSaveError('');
+    try {
     await onAddAnnotation(draft.trim(), annotationTarget.quote, annotationTarget.paragraphIndex);
+    localStorage.removeItem(`${draftKey}-${annotationTarget.paragraphIndex ?? "chapter"}-${encodeURIComponent(annotationTarget.quote)}`);
+    localStorage.removeItem(draftKey);
     setDraft('');
     setComposerOpen(false);
     setThreadTarget(null);
     setAnnotationTarget(null);
     window.getSelection()?.removeAllRanges();
+    } catch { setSaveError('没有保存成功，草稿还在，请再试一次。'); }
+    finally { savingRef.current = false; setSaving(false); }
   };
 
   return (
@@ -531,15 +555,17 @@ function ReaderPage({ book, chapter, chapters, annotations, chapterIndex, setCha
         </div>
       </div>
       <section className='reader-tools'>
-        <label className='reader-search'>
+        <button className='search-toggle' onClick={() => { setSearchOpen(!searchOpen); onLoadChapters(); }} aria-expanded={searchOpen}>搜索</button>
+        {searchOpen && <label className='reader-search'>
           <span>搜索</span>
           <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder='输入书中内容' />
-        </label>
+        </label>}
         <div className='reader-type-tools'>
-          <button onClick={() => setFontSize(Math.max(14, fontSize - 1))}>A-</button>
+          <button onClick={() => { capturePosition(); setFontSize(Math.max(14, fontSize - 1)); }}>A-</button>
           <strong>{fontSize}</strong>
-          <button onClick={() => setFontSize(Math.min(28, fontSize + 1))}>A+</button>
+          <button onClick={() => { capturePosition(); setFontSize(Math.min(28, fontSize + 1)); }}>A+</button>
         </div>
+        {searchOpen && !chapters.length && <small>正在加载搜索内容…</small>}
         {!!searchResults.length && (
           <div className='search-results'>
             {searchResults.map((result) => (
@@ -571,7 +597,7 @@ function ReaderPage({ book, chapter, chapters, annotations, chapterIndex, setCha
           const count = paragraphAnnotations.length;
           const isTarget = annotationTarget?.paragraphIndex === index;
           const isThread = threadTarget?.paragraphIndex === index;
-          const isCurrent = paragraphIndex === index;
+          const isCurrent = false;
           const className = [
             'reader-paragraph',
             count ? 'paragraph-has-note' : '',
@@ -655,7 +681,7 @@ function ReaderPage({ book, chapter, chapters, annotations, chapterIndex, setCha
             <div className='sheet-actions'>
               <button onClick={closeAnnotationTarget}>收起</button>
               <button className='solid-button' onClick={() => {
-                setAnnotationTarget({ quote: threadTarget.quote, paragraphIndex: threadTarget.paragraphIndex, source: 'paragraph' });
+                chooseTarget({ quote: threadTarget.quote, paragraphIndex: threadTarget.paragraphIndex, source: 'paragraph' });
                 setThreadTarget(null);
                 setComposerOpen(true);
               }}>Nenei 再写一条</button>
@@ -664,6 +690,7 @@ function ReaderPage({ book, chapter, chapters, annotations, chapterIndex, setCha
         </div>
       )}
 
+      {saveError && <p className='reader-error' role='alert'>{saveError}</p>}
       {composerOpen && annotationTarget && (
         <div className='reader-sheet-backdrop' onClick={() => setComposerOpen(false)}>
           <section className='reader-annotation-sheet' onClick={(event) => event.stopPropagation()}>
@@ -675,13 +702,13 @@ function ReaderPage({ book, chapter, chapters, annotations, chapterIndex, setCha
               <textarea
                 autoFocus
                 value={draft}
-                onChange={(event) => setDraft(event.target.value)}
+                onChange={(event) => updateDraft(event.target.value)}
                 placeholder='写在页边……'
               />
             </label>
             <div className='sheet-actions'>
               <button onClick={() => setComposerOpen(false)}>先不写</button>
-              <button className='solid-button' disabled={!draft.trim()} onClick={saveAnnotation}>保存</button>
+              <button className='solid-button' disabled={!draft.trim() || saving} onClick={saveAnnotation}>{saving ? '保存中' : '保存'}</button>
             </div>
           </section>
         </div>
@@ -691,44 +718,40 @@ function ReaderPage({ book, chapter, chapters, annotations, chapterIndex, setCha
 }
 
 
-function NotesPage({ book, annotations, chapterIndex, onAddAnnotation }: { book?: Book; annotations: Annotation[]; chapterIndex: number; onAddAnnotation: (text: string) => Promise<void> }) {
-  const [draft, setDraft] = useState('');
-  return (
-    <main className='screen notes-screen'>
-      <div className='screen-title inline'>
-        <div>
-          <h1>页边</h1>
-          <p>{book ? book.title : '未选择书本'}</p>
-        </div>
-        <button className='text-button'>筛选</button>
-      </div>
-      <section className='annotation-composer compact-composer'>
-        <textarea value={draft} onChange={(event) => setDraft(event.target.value)} placeholder={`给第 ${chapterIndex} 章添加批注`} />
-        <div>
-          <button className='solid-button' disabled={!draft.trim()} onClick={async () => {
-            await onAddAnnotation(draft);
-            setDraft('');
-          }}>保存批注</button>
-        </div>
-      </section>
-      {annotations.map((annotation) => (
-        <article className='note-card' key={annotation.id}>
-          <div className='note-head'>
-            <span className='avatar avatar-letter'>{annotation.author === 'ai' ? 'E' : 'N'}</span>
-            <strong>{annotation.author === 'ai' ? 'Elior:' : 'Nenei:'}</strong>
-            <span>“</span>
-          </div>
-          <p>{annotation.text}</p>
-          <footer>
-            <small>第 {annotation.chapterIndex} 章{annotation.paragraphIndex != null ? ` · 段 ${annotation.paragraphIndex + 1}` : ''}</small>
-            <small>{new Date(annotation.createdAt).toLocaleString()}</small>
-            <button>…</button>
-          </footer>
-        </article>
-      ))}
-      {!annotations.length && <p className='empty-copy'>还没有批注。</p>}
-    </main>
-  );
+function ChapterNoteComposer({ storageKey, chapterIndex, onSave }: { storageKey: string; chapterIndex: number; onSave: (text: string) => Promise<void> }) {
+  const [draft, setDraft] = useState(localStorage.getItem(storageKey) || '');
+  const [saving, setSaving] = useState(false);
+  const busy = useRef(false);
+  const [error, setError] = useState('');
+  return <section className='annotation-composer compact-composer'>
+    <textarea aria-label='章节批注' value={draft} placeholder={`给第 ${chapterIndex} 章添加批注`} onChange={e => { setDraft(e.target.value); localStorage.setItem(storageKey, e.target.value); }} />
+    {error && <p role='alert'>{error}</p>}
+    <button className='solid-button' disabled={saving || !draft.trim()} onClick={async () => {
+      if (busy.current || !draft.trim()) return;
+      busy.current = true; setSaving(true); setError('');
+      try { await onSave(draft.trim()); setDraft(''); localStorage.removeItem(storageKey); }
+      catch { setError('没有保存成功，草稿还在，请再试一次。'); }
+      finally { busy.current = false; setSaving(false); }
+    }}>{saving ? '保存中' : '保存批注'}</button>
+  </section>;
+}
+
+function NotesPage({ book, annotations, onOpen, isUnread, chapterIndex, onAddAnnotation }: { book?: Book; annotations: Annotation[]; onOpen: (note: Annotation) => void; isUnread: (note: Annotation) => boolean; chapterIndex: number; onAddAnnotation: (text: string) => Promise<void> }) {
+  const [author, setAuthor] = useState('all');
+  const [chapterFilter, setChapterFilter] = useState('all');
+  const [keyword, setKeyword] = useState('');
+  const filtered = annotations.filter(note => (author === 'all' || note.author === author || (author === 'unread' && isUnread(note))) && (chapterFilter === 'all' || note.chapterIndex === Number(chapterFilter)) && `${note.text} ${note.quote || ''}`.includes(keyword.trim()));
+  return <main className='screen notes-screen'>
+    <div className='screen-title'><h1>页边</h1><p>{book?.title || '未选择书本'} · {annotations.length} 条</p></div>
+    <ChapterNoteComposer key={`${book?.id}-${chapterIndex}`} storageKey={`yomiai-chapter-draft-${book?.id}-${chapterIndex}`} chapterIndex={chapterIndex} onSave={onAddAnnotation} />
+    <div className='note-filters'>
+      <select aria-label='批注作者' value={author} onChange={e => setAuthor(e.target.value)}><option value='all'>我们两人</option><option value='ai'>Elior</option><option value='nenei'>Nenei</option><option value='unread'>未读留言</option></select>
+      <select aria-label='批注章节' value={chapterFilter} onChange={e => setChapterFilter(e.target.value)}><option value='all'>所有章节</option>{[...new Set(annotations.map(n => n.chapterIndex))].sort((a,b) => a-b).map(n => <option key={n} value={n}>第 {n} 章</option>)}</select>
+      <input aria-label='搜索批注' value={keyword} onChange={e => setKeyword(e.target.value)} placeholder='找一句话或一个想法' />
+    </div>
+    {filtered.map(note => <article className='note-card' key={note.id}><div className='note-head'><strong>{note.author === 'ai' ? 'Elior' : 'Nenei'}{isUnread(note) ? ' · 未读' : ''}</strong></div>{note.quote && <blockquote>{note.quote}</blockquote>}<p>{note.text}</p><footer><small>第 {note.chapterIndex} 章 · {new Date(note.createdAt).toLocaleDateString()}</small><button onClick={() => onOpen(note)}>回到原文</button></footer></article>)}
+    {!filtered.length && <p className='empty-copy'>这里还没有符合条件的页边。</p>}
+  </main>;
 }
 
 function TocPage({ book, chapters, chapterIndex, setChapterIndex, setPage }: {
@@ -750,6 +773,7 @@ function TocPage({ book, chapters, chapterIndex, setChapterIndex, setPage }: {
         <p>{book ? `${book.title} · 已读 ${book.progress}%` : '未选择书本'}</p>
       </div>
       <div className='toc-progress'><span style={{ width: `${book?.progress || 0}%` }} /></div>
+      {!chapters.length && <p className='empty-copy'>正在加载目录…</p>}
       <section className='chapter-list'>
         {displayChapters.map((chapter) => (
           <button key={chapter.chapterIndex} className={chapter.chapterIndex === chapterIndex ? 'current' : ''} onClick={() => {
@@ -794,6 +818,7 @@ function SettingsPage({ elior, nenei, setElior, setNenei, accent, setAccent, fon
       </section>
       <PersonEditor label='Elior' person={elior} onChange={(patch) => updatePerson(elior, setElior, patch)} />
       <PersonEditor label='Nenei' person={nenei} onChange={(patch) => updatePerson(nenei, setNenei, patch)} />
+      <BackgroundSettings />
       <section className='settings-card'>
         <h2>主题色</h2>
         <div className='accent-row'>
@@ -889,7 +914,16 @@ function App() {
   const [selectedFont, setSelectedFontState] = useState(localStorage.getItem('nenei-yomiai-font') || '');
   const [fontSize, setFontSizeState] = useState(Number(localStorage.getItem('nenei-yomiai-font-size') || '18'));
 
-  const progressSyncTimer = useRef<number | undefined>(undefined);
+  const [progressReady, setProgressReady] = useState('');
+  const [initialOffset, setInitialOffset] = useState(0);
+  const [notice, setNotice] = useState('');
+  const [chapterRetry, setChapterRetry] = useState(0);
+  const [searchRequested, setSearchRequested] = useState(false);
+  const chapterCache = useRef(new Map<string, ChapterSummary[]>());
+  const [seenNotes, setSeenNotes] = useState<string[]>(() => { try { return JSON.parse(localStorage.getItem('yomiai-seen-notes') || '[]'); } catch { return []; } });
+  const notesRequest = useRef(0);
+  const syncQueues = useRef(new Map<string, Promise<void>>());
+  useBackgrounds();
   const avatarHydrated = useRef({ elior: false, nenei: false });
 
   const selectedBook = books.find((book) => book.id === selectedBookId) || books[0];
@@ -962,95 +996,132 @@ function App() {
     mirrorAvatarToLocalStorage('nenei', nenei.avatar);
   }, [nenei.avatar]);
 
+  const refreshNotes = async (bookId: string) => {
+    const request = ++notesRequest.current;
+    const data = await api<{ annotations: Annotation[] }>(`/books/${bookId}/annotations`);
+    if (request === notesRequest.current) {
+      setAnnotations(data.annotations.sort((a,b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)));
+      const baselineKey = `yomiai-unread-started-${bookId}`;
+      if (!localStorage.getItem(baselineKey)) {
+        markRead(data.annotations);
+        localStorage.setItem(baselineKey, '1');
+      }
+    }
+  };
+
   useEffect(() => {
     if (!selectedBook) return;
-    setSelectedBookId(selectedBook.id);
-    localStorage.setItem('nenei-yomiai-book', selectedBook.id);
-
-    const localProgress = loadLocalProgress(selectedBook.id);
-    if (localProgress) {
-      setChapterIndex(Math.min(selectedBook.chapterCount, Math.max(1, localProgress.chapterIndex)));
-      setParagraphIndex(localProgress.paragraphIndex);
-      setBooks((currentBooks) => currentBooks.map((book) => (
-        book.id === selectedBook.id ? { ...book, progress: localProgress.percent } : book
-      )));
-    } else {
-      api<{ ok: boolean; progress: { chapterIndex: number; paragraphIndex?: number; percent?: number }[] }>(`/progress?bookId=${selectedBook.id}`)
-        .then((data) => {
-          const current = data.progress[0];
-          if (current) {
-            setChapterIndex(current.chapterIndex);
-            setParagraphIndex(current.paragraphIndex);
-            const percent = typeof current.percent === 'number'
-              ? Math.min(100, Math.max(0, Math.round(current.percent)))
-              : calcProgressPercent(current.chapterIndex, selectedBook.chapterCount);
-            saveLocalProgress(selectedBook.id, {
-              chapterIndex: current.chapterIndex,
-              paragraphIndex: current.paragraphIndex,
-              percent,
-              updatedAt: Date.now(),
-            });
-          }
-        })
-        .catch(console.error);
-    }
-
-    api<{ ok: boolean; chapters: Pick<Chapter, 'chapterIndex' | 'title' | 'paragraphs'>[] }>(`/books/${selectedBook.id}/chapters?from=1&to=${selectedBook.chapterCount}`)
-      .then((data) => setChapters(data.chapters))
-      .catch(console.error);
+    const id = selectedBook.id;
+    const controller = new AbortController();
+    setProgressReady(''); setChapter(undefined); setChapters(chapterCache.current.get(id) || []); setSearchRequested(false); setAnnotations([]);
+    setSelectedBookId(id); localStorage.setItem('nenei-yomiai-book', id);
+    const local = loadLocalProgress(id);
+    const restore = (progress?: LocalProgress) => {
+      setChapterIndex(Math.min(selectedBook.chapterCount, Math.max(1, progress?.chapterIndex || 1)));
+      setParagraphIndex(progress?.paragraphIndex);
+      setInitialOffset(progress?.paragraphOffset || 0);
+      setProgressReady(id);
+    };
+    // Resolve the newest bookmark before allowing the reader to write progress.
+    api<{ progress: { chapterIndex: number; paragraphIndex?: number; percent?: number; updatedAt?: string }[] }>(`/progress?bookId=${id}`, { signal: controller.signal })
+      .then(data => {
+        if (controller.signal.aborted) return;
+        const remote = data.progress[0];
+        const remoteTime = remote?.updatedAt ? Date.parse(remote.updatedAt) : 0;
+        if (local && (local.pending || local.updatedAt >= remoteTime)) restore(local);
+        else if (remote) {
+          const next = { chapterIndex: remote.chapterIndex, paragraphIndex: remote.paragraphIndex, percent: remote.percent || 0, updatedAt: remoteTime };
+          saveLocalProgress(id, next); restore(next);
+        } else restore(local);
+      }).catch(() => { if (!controller.signal.aborted) restore(local); });
+    refreshNotes(id).catch(() => { if (!controller.signal.aborted) setNotice('页边暂时未能加载，恢复网络后会重试。'); });
+    return () => { controller.abort(); ++notesRequest.current; };
   }, [selectedBook?.id]);
 
   useEffect(() => {
-    if (!selectedBook) return;
-    localStorage.setItem('nenei-yomiai-chapter', String(chapterIndex));
-    api<{ ok: boolean; chapter: Chapter }>(`/books/${selectedBook.id}/chapters/${chapterIndex}`)
-      .then((data) => setChapter(data.chapter))
-      .catch(console.error);
-    api<{ ok: boolean; annotations: Annotation[] }>(`/books/${selectedBook.id}/annotations?chapterIndex=${chapterIndex}`)
-      .then((data) => setAnnotations(data.annotations))
-      .catch(console.error);
-  }, [selectedBook?.id, chapterIndex]);
+    if (!selectedBook || (page !== 'toc' && !searchRequested) || chapterCache.current.has(selectedBook.id)) return;
+    const id = selectedBook.id;
+    const controller = new AbortController();
+    api<{ chapters: ChapterSummary[] }>(`/books/${id}/chapters?from=1&to=${selectedBook.chapterCount}`, { signal: controller.signal })
+      .then(data => { if (!controller.signal.aborted) { chapterCache.current.set(id, data.chapters); setChapters(data.chapters); } })
+      .catch(() => { if (!controller.signal.aborted) setNotice('目录与搜索暂时未能加载，请重新打开重试。'); });
+    return () => controller.abort();
+  }, [selectedBook?.id, page, searchRequested]);
+
+  useEffect(() => {
+    if (!selectedBook || progressReady !== selectedBook.id) return;
+    const controller = new AbortController();
+    setChapter(undefined);
+    api<{ chapter: Chapter }>(`/books/${selectedBook.id}/chapters/${chapterIndex}`, { signal: controller.signal })
+      .then(data => { if (!controller.signal.aborted) setChapter(data.chapter); })
+      .catch(() => { if (!controller.signal.aborted) setNotice('章节暂时未能加载，请检查网络后重新打开。'); });
+    return () => controller.abort();
+  }, [selectedBook?.id, chapterIndex, progressReady, chapterRetry]);
 
   useEffect(() => {
     if (!selectedBook) return;
-    const percent = calcProgressPercent(chapterIndex, selectedBook.chapterCount);
-    const nextStatus: ShelfStatus = percent >= 100
-      ? '已读'
-      : selectedBook.status === '已读'
-        ? '已读'
-        : '正在读';
+    const refresh = () => { if (!document.hidden) refreshNotes(selectedBook.id).catch(() => {}); };
+    document.addEventListener('visibilitychange', refresh);
+    window.addEventListener('focus', refresh);
+    window.addEventListener('online', refresh);
+    const timer = window.setInterval(refresh, 30000);
+    return () => { window.clearInterval(timer); document.removeEventListener('visibilitychange', refresh); window.removeEventListener('focus', refresh); window.removeEventListener('online', refresh); };
+  }, [selectedBook?.id]);
 
-    const localProgress: LocalProgress = {
-      chapterIndex,
-      paragraphIndex,
-      percent,
-      updatedAt: Date.now(),
-    };
-
-    localStorage.setItem('nenei-yomiai-chapter', String(chapterIndex));
-    saveLocalProgress(selectedBook.id, localProgress);
-    setBooks((currentBooks) => currentBooks.map((book) => (
-      book.id === selectedBook.id ? { ...book, progress: percent, status: nextStatus } : book
-    )));
-
-    if (progressSyncTimer.current) {
-      window.clearTimeout(progressSyncTimer.current);
-    }
-
-    progressSyncTimer.current = window.setTimeout(() => {
-      api('/progress', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ bookId: selectedBook.id, chapterIndex, paragraphIndex, percent, status: nextStatus }),
-      }).catch(console.error);
-    }, 220);
-
-    return () => {
-      if (progressSyncTimer.current) {
-        window.clearTimeout(progressSyncTimer.current);
+  const syncProgress = (book: Book, progress: LocalProgress) => {
+    const queue = (syncQueues.current.get(book.id) || Promise.resolve()).then(async () => {
+      if (loadLocalProgress(book.id)?.updatedAt !== progress.updatedAt) return;
+      try {
+        await api('/progress', { method: 'PUT', keepalive: true, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bookId: book.id, chapterIndex: progress.chapterIndex, paragraphIndex: progress.paragraphIndex, percent: progress.percent, status: progress.status || book.status }) });
+        const latest = loadLocalProgress(book.id);
+        if (latest?.updatedAt === progress.updatedAt) saveLocalProgress(book.id, { ...latest, pending: false, updatedAt: Date.now() });
+      } catch { setNotice('阅读位置已保存在这台设备，联网后继续同步。'); }
+    });
+    syncQueues.current.set(book.id, queue);
+  };
+  useEffect(() => {
+    const retry = () => {
+      for (const book of books) {
+        const pending = loadLocalProgress(book.id);
+        if (pending?.pending) syncProgress(book, pending);
       }
     };
-  }, [selectedBook?.id, chapterIndex, paragraphIndex]);
+    window.addEventListener('online', retry);
+    retry();
+    return () => window.removeEventListener('online', retry);
+  }, [books.map(book => book.id).join(',')]);
+
+  const savePosition = (paragraph: number, offset: number, fraction: number) => {
+    if (!selectedBook || progressReady !== selectedBook.id) return;
+    const book = selectedBook;
+    const percent = book.status === '已读' ? 100 : Math.min(99, Math.max(0, Math.round(((chapterIndex - 1 + fraction) / book.chapterCount) * 100)));
+    const progress: LocalProgress = { chapterIndex, paragraphIndex: paragraph, paragraphOffset: offset, percent, updatedAt: Date.now(), pending: true };
+    saveLocalProgress(book.id, progress);
+    setBooks(current => current.map(item => item.id === book.id ? { ...item, progress: percent } : item));
+    syncProgress(book, progress);
+  };
+  const changeBookStatus = (status: ShelfStatus) => {
+    if (!selectedBook || progressReady !== selectedBook.id) return;
+    const saved = loadLocalProgress(selectedBook.id);
+    const progress: LocalProgress = { chapterIndex, paragraphIndex, ...saved, status, percent: status === '已读' ? 100 : Math.min(99, saved?.percent || 0), updatedAt: Date.now(), pending: true };
+    const book = { ...selectedBook, status, progress: progress.percent };
+    saveLocalProgress(book.id, progress);
+    setBooks(current => current.map(item => item.id === book.id ? book : item));
+    syncProgress(book, progress);
+  };
+  const markRead = (notes: Annotation[]) => setSeenNotes(current => {
+    const next = [...new Set([...current, ...notes.filter(n => n.author === 'ai').map(n => n.id)])];
+    localStorage.setItem('yomiai-seen-notes', JSON.stringify(next)); return next;
+  });
+  const isUnread = (note: Annotation) => note.author === 'ai' && !seenNotes.includes(note.id);
+  const continueReading = (nextPage: Page) => {
+    if (nextPage === 'reader' && selectedBook) {
+      const saved = loadLocalProgress(selectedBook.id);
+      if (saved) { setChapterIndex(saved.chapterIndex); setParagraphIndex(saved.paragraphIndex); setInitialOffset(saved.paragraphOffset || 0); }
+    }
+    setPage(nextPage);
+  };
+  const openNote = (note: Annotation) => { markRead([note]); setInitialOffset(0); setChapterIndex(note.chapterIndex); setParagraphIndex(note.paragraphIndex); setPage('reader'); };
 
   const importBook = async (file: File) => {
     setImporting(true);
@@ -1091,21 +1162,22 @@ function App() {
         author: 'nenei',
       }),
     });
-    const data = await api<{ ok: boolean; annotations: Annotation[] }>(`/books/${selectedBook.id}/annotations?chapterIndex=${chapterIndex}`);
-    setAnnotations(data.annotations);
+    await refreshNotes(selectedBook.id).catch(() => setNotice('批注已保存，列表稍后刷新。'));
   };
 
   return (
     <div className='app-shell' style={style}>
       <div className='phone-frame'>
+        {notice && <button className='app-notice' onClick={() => setNotice('')}>{notice} ×</button>}
         <Header setPage={setPage} elior={elior} nenei={nenei} />
-        {page === 'home' && <HomePage setPage={setPage} book={selectedBook} />}
-        {page === 'shelf' && <ShelfPage books={books} selectedBookId={selectedBook?.id} onSelectBook={(id) => {
+        {page === 'home' && <HomePage setPage={continueReading} book={selectedBook} notes={annotations.filter(note => note.chapterIndex <= chapterIndex)} onOpen={openNote} isUnread={isUnread} />}
+        {page === 'shelf' && <ShelfPage onStatus={changeBookStatus} books={books} selectedBookId={selectedBook?.id} onSelectBook={(id) => {
           const targetBook = books.find((book) => book.id === id);
           const savedProgress = loadLocalProgress(id);
           setSelectedBookId(id);
           setChapterIndex(savedProgress?.chapterIndex || 1);
           setParagraphIndex(savedProgress?.paragraphIndex);
+          setInitialOffset(savedProgress?.paragraphOffset || 0);
           if (targetBook && savedProgress) {
             setBooks((currentBooks) => currentBooks.map((book) => (
               book.id === id ? { ...book, progress: savedProgress.percent } : book
@@ -1113,9 +1185,10 @@ function App() {
           }
           setPage('reader');
         }} onImport={importBook} importing={importing} />}
-        {page === 'reader' && <ReaderPage book={selectedBook} chapter={chapter} chapters={chapters} annotations={annotations} chapterIndex={chapterIndex} setChapterIndex={setChapterIndex} selectedFont={selectedFont} fontSize={fontSize} setFontSize={setFontSize} paragraphIndex={paragraphIndex} setParagraphIndex={setParagraphIndex} setPage={setPage} onAddAnnotation={addAnnotation} />}
-        {page === 'notes' && <NotesPage book={selectedBook} annotations={annotations} chapterIndex={chapterIndex} onAddAnnotation={addAnnotation} />}
-        {page === 'toc' && <TocPage book={selectedBook} chapters={chapters} chapterIndex={chapterIndex} setChapterIndex={setChapterIndex} setPage={setPage} />}
+        {page === 'reader' && (progressReady !== selectedBook?.id || !chapter || chapter.bookId !== selectedBook?.id || chapter.chapterIndex !== chapterIndex) && <main className='screen'><p>正在打开书页…</p><button className='text-button' onClick={() => setChapterRetry(value => value + 1)}>重新加载</button></main>}
+        {page === 'reader' && progressReady === selectedBook?.id && chapter?.bookId === selectedBook?.id && chapter?.chapterIndex === chapterIndex && <ReaderPage key={`${selectedBook?.id}-${chapterIndex}`} initialOffset={initialOffset} onPosition={savePosition} onReadNotes={markRead} onLoadChapters={() => setSearchRequested(true)} book={selectedBook} chapter={chapter} chapters={chapters} annotations={annotations.filter(note => note.chapterIndex === chapterIndex)} chapterIndex={chapterIndex} setChapterIndex={index => { setInitialOffset(0); setChapterIndex(index); }} selectedFont={selectedFont} fontSize={fontSize} setFontSize={setFontSize} paragraphIndex={paragraphIndex} setParagraphIndex={setParagraphIndex} setPage={setPage} onAddAnnotation={addAnnotation} />}
+        {page === 'notes' && <NotesPage chapterIndex={chapterIndex} onAddAnnotation={addAnnotation} book={selectedBook} annotations={annotations} onOpen={openNote} isUnread={isUnread} />}
+        {page === 'toc' && <TocPage book={selectedBook} chapters={chapters} chapterIndex={chapterIndex} setChapterIndex={index => { setParagraphIndex(undefined); setInitialOffset(0); setChapterIndex(index); }} setPage={setPage} />}
         {page === 'settings' && <SettingsPage elior={elior} nenei={nenei} setElior={setElior} setNenei={setNenei} accent={accent} setAccent={setAccent} fonts={fonts} selectedFont={selectedFont} setSelectedFont={setSelectedFont} onImportFont={importFont} />}
         {page !== 'reader' && <BottomNav page={page} setPage={setPage} />}
       </div>

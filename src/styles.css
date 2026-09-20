@@ -960,3 +960,26 @@ h1, h2, h3, p { margin: 0; }
   font-size: 14px;
   line-height: 1.75;
 }
+
+/* Reader updates: native scrolling; no JS scroll locks or blur over moving text. */
+.phone-frame { height: min(930px, calc(100dvh - 36px)); }
+@media (max-width:480px) { .phone-frame { height:100dvh; min-height:100dvh; } }
+.reader-screen { overscroll-behavior-y: contain; }
+.reader-screen::-webkit-scrollbar { display:block; width:3px; }
+.reader-screen::-webkit-scrollbar-thumb { background:rgba(90,80,65,.24); border-radius:4px; }
+.reader-screen { scrollbar-width:thin; scrollbar-color:rgba(90,80,65,.24) transparent; }
+.phone-frame.reader-mode .reader-tools { flex-wrap:wrap; }
+.reader-search { flex:1 0 100%; order:3; }
+.search-toggle { font-size:13px; padding:6px 8px; }
+.recent-note { display:block; width:100%; text-align:left; margin:12px 0; padding:16px; border:1px solid rgba(17,17,17,.14); background:rgba(255,255,255,.64); }
+.recent-note p { margin:10px 0; line-height:1.7; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
+.recent-note blockquote,.note-card blockquote { margin:10px 0; padding-left:10px; border-left:2px solid var(--accent); color:#756e63; font-size:13px; line-height:1.6; }
+.recent-note blockquote { max-height:4.8em; overflow:hidden; }
+.note-filters { display:flex; flex-wrap:wrap; gap:8px; margin:16px 0; }
+.note-filters select,.note-filters input { padding:9px; border:1px solid #d6d0c5; background:#fffefa; min-width:0; }
+.note-filters input { width:100%; }
+.note-card footer button { text-decoration:underline; }
+.app-notice,.reader-error { position:absolute; z-index:1500; bottom:90px; left:14px; right:14px; padding:12px; background:#fff2dc; border:1px solid #cbb997; font-size:13px; }
+.has-yomiai-home-bg .phone-frame:not(.reader-mode)::after,.has-yomiai-reader-bg .phone-frame.reader-mode::after { content:'';position:absolute;inset:0;pointer-events:none;background-size:cover;background-position:center;z-index:0; }
+.has-yomiai-home-bg .phone-frame:not(.reader-mode)::after { background-image:linear-gradient(rgba(255,254,250,.70),rgba(255,254,250,.80)),var(--yomiai-home-bg); }
+.has-yomiai-reader-bg .phone-frame.reader-mode::after { background-image:linear-gradient(rgba(255,254,250,.82),rgba(255,254,250,.92)),var(--yomiai-reader-bg); }
