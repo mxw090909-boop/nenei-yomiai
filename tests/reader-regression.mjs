@@ -74,7 +74,7 @@ assert.equal(w.document.querySelector('textarea').value,'','different quote gets
 await click('先不写');await click('×');
 w.document.querySelector('#paragraph-2-20').click();await delay(40);await click('+ Nenei 页边');
 assert.equal(w.document.querySelector('textarea').value,'保留我的草稿');
-failSave=true;await click('保存');assert.ok(w.document.body.textContent.includes('没有保存成功'));
+failSave=true;await click('保存');assert.ok(w.document.body.textContent.includes('保存失败'));
 assert.equal(w.document.querySelector('textarea').value,'保留我的草稿');
 failSave=false; const beforePosts=calls.filter(c=>c.method==='POST').length;
 button('保存').click();button('保存').click();await delay(50);

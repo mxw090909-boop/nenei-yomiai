@@ -285,7 +285,7 @@ function HomePage({ setPage, book, notes, onOpen, isUnread }: { setPage: (page: 
       </div>
       <section className='section-block'>
         <h2>最近的页边</h2>
-        {notes.slice(0, 5).map(note => <button className='recent-note' key={note.id} onClick={() => onOpen(note)}><strong>{note.author === 'ai' ? 'Elior' : 'Nenei'}{isUnread(note) ? ' · 未读' : ''}</strong>{note.quote && <blockquote>{note.quote}</blockquote>}<p>{note.text}</p><small>第 {note.chapterIndex} 章 · 回到原文</small></button>)}
+        {notes.slice(0, 5).map(note => <button className='recent-note' key={note.id} onClick={() => onOpen(note)}><strong>{note.author === 'ai' ? 'Elior' : 'Nenei'}{isUnread(note) ? ' · 未读' : ''}</strong>{note.quote && <blockquote>{note.quote}</blockquote>}<p>{note.text}</p><small>第 {note.chapterIndex} 章</small></button>)}
         {!notes.length && <p className='empty-copy'>来写下第一条想法吧</p>}
       </section>
     </main>
@@ -541,12 +541,13 @@ function ReaderPage({ book, chapter, chapters, annotations, chapterIndex, setCha
     setThreadTarget(null);
     setAnnotationTarget(null);
     window.getSelection()?.removeAllRanges();
-    } catch { setSaveError('没有保存成功，草稿还在，请再试一次。'); }
+    } catch { setSaveError('保存失败，草稿已保留。'); }
     finally { savingRef.current = false; setSaving(false); }
   };
 
   return (
     <main className='screen reader-screen' ref={screenRef}>
+      <section className='reader-tools'>
       <div className='reader-top'>
         <button disabled={chapterIndex <= 1} onClick={() => goChapter(chapterIndex - 1)}>‹</button>
         <div>
@@ -554,11 +555,9 @@ function ReaderPage({ book, chapter, chapters, annotations, chapterIndex, setCha
           <button disabled={chapterIndex >= book.chapterCount} onClick={() => goChapter(chapterIndex + 1)}>›</button>
         </div>
       </div>
-      <section className='reader-tools'>
         <button className='search-toggle' onClick={() => { setSearchOpen(!searchOpen); onLoadChapters(); }} aria-expanded={searchOpen}>搜索</button>
         {searchOpen && <label className='reader-search'>
-          <span>搜索</span>
-          <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder='输入书中内容' />
+          <input aria-label='搜索书中内容' value={search} onChange={(event) => setSearch(event.target.value)} placeholder='输入书中内容' />
         </label>}
         <div className='reader-type-tools'>
           <button onClick={() => { capturePosition(); setFontSize(Math.max(14, fontSize - 1)); }}>A-</button>
@@ -664,7 +663,7 @@ function ReaderPage({ book, chapter, chapters, annotations, chapterIndex, setCha
         <div className='reader-sheet-backdrop' onClick={() => setThreadTarget(null)}>
           <section className='reader-annotation-sheet reader-thread-sheet' onClick={(event) => event.stopPropagation()}>
             <span className='sheet-handle' />
-            <p className='sheet-label'>这一段的页边</p>
+            <p className='sheet-label'>页边</p>
             <blockquote>{threadTarget.quote}</blockquote>
             <div className='thread-note-list'>
               {threadTarget.annotations.map((annotation) => (
@@ -684,7 +683,7 @@ function ReaderPage({ book, chapter, chapters, annotations, chapterIndex, setCha
                 chooseTarget({ quote: threadTarget.quote, paragraphIndex: threadTarget.paragraphIndex, source: 'paragraph' });
                 setThreadTarget(null);
                 setComposerOpen(true);
-              }}>Nenei 再写一条</button>
+              }}>再写一条</button>
             </div>
           </section>
         </div>
@@ -695,7 +694,7 @@ function ReaderPage({ book, chapter, chapters, annotations, chapterIndex, setCha
         <div className='reader-sheet-backdrop' onClick={() => setComposerOpen(false)}>
           <section className='reader-annotation-sheet' onClick={(event) => event.stopPropagation()}>
             <span className='sheet-handle' />
-            <p className='sheet-label'>{annotationTarget.source === 'selection' ? '引用所选文字' : '引用这一段'}</p>
+            <p className='sheet-label'>引用</p>
             <blockquote>{annotationTarget.quote}</blockquote>
             <label>
               <span>Nenei</span>
@@ -730,7 +729,7 @@ function ChapterNoteComposer({ storageKey, chapterIndex, onSave }: { storageKey:
       if (busy.current || !draft.trim()) return;
       busy.current = true; setSaving(true); setError('');
       try { await onSave(draft.trim()); setDraft(''); localStorage.removeItem(storageKey); }
-      catch { setError('没有保存成功，草稿还在，请再试一次。'); }
+      catch { setError('保存失败，草稿已保留。'); }
       finally { busy.current = false; setSaving(false); }
     }}>{saving ? '保存中' : '保存批注'}</button>
   </section>;

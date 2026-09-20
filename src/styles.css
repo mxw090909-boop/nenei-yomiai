@@ -983,3 +983,10 @@ h1, h2, h3, p { margin: 0; }
 .has-yomiai-home-bg .phone-frame:not(.reader-mode)::after,.has-yomiai-reader-bg .phone-frame.reader-mode::after { content:'';position:absolute;inset:0;pointer-events:none;background-size:cover;background-position:center;z-index:0; }
 .has-yomiai-home-bg .phone-frame:not(.reader-mode)::after { background-image:linear-gradient(rgba(255,254,250,.70),rgba(255,254,250,.80)),var(--yomiai-home-bg); }
 .has-yomiai-reader-bg .phone-frame.reader-mode::after { background-image:linear-gradient(rgba(255,254,250,.82),rgba(255,254,250,.92)),var(--yomiai-reader-bg); }
+
+/* Shared header keeps the same compact rhythm outside the reader. */
+.phone-frame:not(.reader-mode) .topbar{height:64px;padding:10px 20px;backdrop-filter:none}
+.phone-frame:not(.reader-mode) .brand{font-size:25px}
+.phone-frame:not(.reader-mode) .screen{top:64px;padding-top:12px}
+.screen-title{margin-bottom:14px}
+.screen-title h1{font-size:30px}
