@@ -256,7 +256,7 @@ function Avatar({ person, muted = false }: { person: Person; muted?: boolean }) 
 function Header({ setPage, elior, nenei }: { setPage: (page: Page) => void; elior: Person; nenei: Person }) {
   return (
     <header className='topbar'>
-      <button className='brand' onClick={() => setPage('home')} aria-label='回到首页'>nenei-yomiai</button>
+      <button className='brand' onClick={() => setPage('home')} aria-label='回到首页'>字里，我们</button>
       <div className='identity-mini'>
         <Avatar person={elior} />
         <Avatar person={nenei} muted />
@@ -291,7 +291,7 @@ function ShelfPage({ books, selectedBookId, onSelectBook, onImport, importing, o
       <div className='screen-title inline'>
         <div>
           <h1>书架</h1>
-          <p>想读 · 正在读 · 已读</p>
+
         </div>
         <button className='text-button' onClick={() => inputRef.current?.click()} disabled={importing}>
           {importing ? '导入中' : '导入'}
@@ -313,10 +313,10 @@ function ShelfPage({ books, selectedBookId, onSelectBook, onImport, importing, o
           <button key={item} className={status === item ? 'active' : ''} onClick={() => setStatus(item)}>{item}</button>
         ))}
       </div>
-      {selectedBookId && <label className='field'><span>《{books.find(book => book.id === selectedBookId)?.title}》的状态</span><select aria-label='书籍状态' value={books.find(book => book.id === selectedBookId)?.status || '正在读'} onChange={e => onStatus(e.target.value as ShelfStatus)}>{(['想读', '正在读', '已读'] as ShelfStatus[]).map(value => <option key={value}>{value}</option>)}</select></label>}
+
       <section className='book-list'>
         {filtered.map((book) => (
-          <button className={'book-row ' + (book.id === selectedBookId ? 'selected' : '')} key={book.id} onClick={() => onSelectBook(book.id)}>
+          <div className='shelf-entry' key={book.id}><button className={'book-row ' + (book.id === selectedBookId ? 'selected' : '')} key={book.id} onClick={() => onSelectBook(book.id)}>
             <Cover book={book} />
             <div>
               <h3>{book.title}</h3>
@@ -324,7 +324,7 @@ function ShelfPage({ books, selectedBookId, onSelectBook, onImport, importing, o
               <small>{book.status} · {book.chapterCount} 章{book.progress ? ` · 已读 ${book.progress}%` : ''}</small>
               <div className='mini-progress'><span style={{ width: `${book.progress}%` }} /></div>
             </div>
-          </button>
+          </button>{book.id === selectedBookId && <details className='book-manage'><summary aria-label='管理这本书'>···</summary><label><span>阅读状态</span><select aria-label='书籍状态' value={book.status} onChange={e=>onStatus(e.target.value as ShelfStatus)}>{(['想读','正在读','已读'] as ShelfStatus[]).map(value=><option key={value}>{value}</option>)}</select></label></details>}</div>
         ))}
         {!filtered.length && <p className='empty-copy'>这里还没有书。</p>}
       </section>
@@ -653,7 +653,7 @@ function ReaderPage({ book, chapter, chapters, annotations, chapterIndex, setCha
             <blockquote>{threadTarget.quote}</blockquote>
             <div className='thread-note-list'>
               {threadTarget.annotations.map((annotation) => (
-                <article className='thread-note' key={annotation.id}>
+                <article className='thread-note' data-author={annotation.author} key={annotation.id}>
                   <div>
                     <strong>{annotation.author === 'ai' ? 'Elior' : 'Nenei'}</strong>
                     <small>{new Date(annotation.createdAt).toLocaleString()}</small>
@@ -717,7 +717,7 @@ function NotesPage({ book, annotations, onOpen, isUnread }: { book?: Book; annot
       <input aria-label='搜索批注' value={keyword} onChange={e => setKeyword(e.target.value)} placeholder='找一句话或一个想法' />
     </div>
     </details>
-    {filtered.map(note => <article className='note-card' key={note.id}><div className='note-head'><strong>{note.author === 'ai' ? 'Elior' : 'Nenei'}{isUnread(note) ? ' · 未读' : ''}</strong></div>{note.quote && <blockquote>{note.quote}</blockquote>}<p>{note.text}</p><footer><small>第 {note.chapterIndex} 章 · {new Date(note.createdAt).toLocaleDateString()}</small><button onClick={() => onOpen(note)}>回到原文</button></footer></article>)}
+    {filtered.map(note => <article className='note-card' data-author={note.author} key={note.id}><div className='note-head'><strong>{note.author === 'ai' ? 'Elior' : 'Nenei'}{isUnread(note) ? ' · 未读' : ''}</strong></div>{note.quote && <blockquote>{note.quote}</blockquote>}<p>{note.text}</p><footer><small>第 {note.chapterIndex} 章 · {new Date(note.createdAt).toLocaleDateString()}</small><button onClick={() => onOpen(note)}>回到原文</button></footer></article>)}
     {!filtered.length && <p className='empty-copy'>这里还没有符合条件的页边。</p>}
   </main>;
 }
@@ -850,6 +850,16 @@ function PersonEditor({ label, person, onChange }: { label: string; person: Pers
   );
 }
 
+function NavIcon({ page }: { page: Page }) {
+  const paths: Partial<Record<Page, string>> = {
+    home: 'M3 10 12 3l9 7M5 9v12h5v-7h4v7h5V9',
+    shelf: 'M4 4v16h4V4H4m7 0v16h4V4h-4m7 1 3 14',
+    notes: 'M5 4h10M5 8h8M5 12h5M5 16h4m3 4 2-5 6-6 3 3-6 6-5 2',
+    settings: 'M4 6h16M4 12h16M4 18h16M8 3v6m8 0v6m-6 0v6',
+  };
+  return <svg viewBox='0 0 24 24' width='21' height='21' fill='none' stroke='currentColor' strokeWidth='1.35' strokeLinecap='round' strokeLinejoin='round' aria-hidden='true'><path d={paths[page]} /></svg>;
+}
+
 function BottomNav({ page, setPage }: { page: Page; setPage: (page: Page) => void }) {
   const nav: { page: Page; label: string; icon: string }[] = [
     { page: 'home', label: '首页', icon: '⌂' },
@@ -862,7 +872,7 @@ function BottomNav({ page, setPage }: { page: Page; setPage: (page: Page) => voi
     <nav className='bottom-nav'>
       {nav.map((item) => (
         <button key={item.page} className={page === item.page ? 'active' : ''} onClick={() => setPage(item.page)}>
-          <span className='nav-icon'>{item.icon}</span>{item.label}
+          <span className='nav-icon'><NavIcon page={item.page} /></span>{item.label}
         </button>
       ))}
     </nav>

@@ -1033,3 +1033,38 @@ h1, h2, h3, p { margin: 0; }
 .reader-progress{position:static;background:none;border:0;padding:8px 8px 24px}
 .progress-slider{display:none}
 @media(max-width:360px){.home-screen .hero-card{gap:16px;grid-template-columns:90px 1fr}.home-screen .hero-card .cover{width:90px;height:132px}.home-screen .hero-copy h1{font-size:24px}}
+
+/* A quieter paper palette and small, shared traces in the margins. */
+.brand{font-family:Georgia,'Songti SC',serif!important;letter-spacing:.08em!important}
+.phone-frame:not(.reader-mode) .brand{font-size:23px}
+.continue-book{background:#f5f6f0;background:color-mix(in srgb,var(--accent) 4%,#fffefa);color:#586951;border-color:#d9dfd1;text-align:left;padding:14px 18px;border-radius:6px}
+.continue-book::after{content:'→';float:right;color:#87977c}
+.daily-quote{position:relative;border:0;background:#f8f5ee;border-radius:3px 14px 3px 3px;padding:18px 20px 24px;margin-top:2px}
+.daily-quote::before{content:'“';display:block;font-family:Georgia,serif;font-size:48px;line-height:.8;color:#d8cbb5;margin:8px 0 4px;pointer-events:none}
+.daily-heading{letter-spacing:.08em}
+.quote-open blockquote{font-size:20px;line-height:1.9;margin:20px 0}
+.quote-open>span{margin-top:22px}
+.bottom-nav{border-top-color:#e8e3d9;background:#fffefa}
+.bottom-nav button{position:relative;color:#9b968b;font-size:11px}
+.bottom-nav button.active{color:#617557}
+.bottom-nav button.active::after{content:'';position:absolute;bottom:3px;left:calc(50% - 2px);width:4px;height:4px;border-radius:50%;background:currentColor}
+.nav-icon{display:flex;align-items:center;justify-content:center}
+[data-author='ai']{--author-ink:#687b67;--author-rule:#cbd5c8}
+[data-author='nenei']{--author-ink:#a07570;--author-rule:#e3cbc6}
+.thread-note strong,.note-head strong{color:var(--author-ink,#687b67)}
+.thread-note strong::before,.note-head strong::before{content:'';display:inline-block;width:5px;height:5px;border-radius:50%;background:currentColor;margin-right:8px;vertical-align:middle}
+.note-card blockquote{border-left-color:var(--author-rule,#d4c6af)}
+.reader-annotation-sheet{border-radius:18px 18px 6px 6px;box-shadow:0 -8px 40px #55463110;animation:paper-appear .16s ease-out}
+@keyframes paper-appear{from{opacity:0;translate:0 10px}to{opacity:1;translate:0 0}}
+@media(prefers-reduced-motion:reduce){.reader-annotation-sheet{animation:none}}
+.shelf-entry{position:relative;border-bottom:1px solid #e6e0d5;padding:6px 0}
+.shelf-entry .book-row{width:100%;border:0;border-radius:0;box-shadow:none;background:none;padding:18px 30px 18px 0;text-align:left}
+.shelf-entry .book-row.selected{background:none;border:0}
+.shelf-entry .cover{filter:none;border:0;box-shadow:2px 4px 10px #302d2818}
+.shelf-entry .book-row h3{font-weight:500;font-family:Georgia,'Songti SC',serif;font-size:21px}
+.shelf-entry .book-row small{font-size:11px;color:#938979}
+.book-manage{position:absolute;right:0;top:20px;z-index:4}
+.book-manage summary{list-style:none;cursor:pointer;width:36px;height:36px;display:grid;place-items:center;color:#8b8070;font-size:19px}
+.book-manage summary::-webkit-details-marker{display:none}
+.book-manage label{position:absolute;right:0;display:grid;gap:10px;padding:16px;background:#fffefa;border:1px solid #e1dacd;box-shadow:0 8px 24px #302d2812;border-radius:8px;width:170px;font-size:12px;color:#8b8070}
+.book-manage select{padding:8px;background:#f7f4ed;border:1px solid #e1dacd;color:#514a40;font-size:13px}
