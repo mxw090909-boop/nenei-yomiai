@@ -257,7 +257,7 @@ function Avatar({ person, muted = false }: { person: Person; muted?: boolean }) 
 function Header({ setPage, elior, nenei }: { setPage: (page: Page) => void; elior: Person; nenei: Person }) {
   return (
     <header className='topbar'>
-      <button className='brand' onClick={() => setPage('home')} aria-label='回到首页'>VERSO À DEUX</button>
+      <button className='brand' onClick={() => setPage('home')} aria-label='回到首页'><img className='brand-mark' src='/nenei-yomiai/verso-icon.svg' alt='' /><span className='brand-type'><span>VERSO</span>{' '}<small>À DEUX</small></span></button>
       <div className='identity-mini'>
         <Avatar person={elior} />
         <Avatar person={nenei} muted />
@@ -853,9 +853,9 @@ function PersonEditor({ label, person, onChange }: { label: string; person: Pers
 
 function NavIcon({ page }: { page: Page }) {
   const paths: Partial<Record<Page, string>> = {
-    home: 'M3 10 12 3l9 7M5 9v12h5v-7h4v7h5V9',
-    shelf: 'M4 4v16h4V4H4m7 0v16h4V4h-4m7 1 3 14',
-    notes: 'M5 4h10M5 8h8M5 12h5M5 16h4m3 4 2-5 6-6 3 3-6 6-5 2',
+    home: 'M3 4.5c3.5-.5 6 .5 9 3v14c-3-2.5-5.5-3.5-9-3V4.5Zm18 0c-3.5-.5-6 .5-9 3v14c3-2.5 5.5-3.5 9-3V4.5Z',
+    shelf: 'M3 6h4v14H3zM9 3h4v17H9zM15 6l4-1 3 14-4 1zM3 16h4M9 7h4',
+    notes: 'M14 21H4V3h16v10M8 7h8M8 11h5M8 15h3M16 15h6v4h-3l-3 3v-7Z',
     settings: 'M4 6h16M4 12h16M4 18h16M8 3v6m8 0v6m-6 0v6',
   };
   return <svg viewBox='0 0 24 24' width='21' height='21' fill='none' stroke='currentColor' strokeWidth='1.35' strokeLinecap='round' strokeLinejoin='round' aria-hidden='true'><path d={paths[page]} /></svg>;

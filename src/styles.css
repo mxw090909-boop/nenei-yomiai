@@ -1070,3 +1070,17 @@ h1, h2, h3, p { margin: 0; }
 .book-manage select{padding:8px;background:#f7f4ed;border:1px solid #e1dacd;color:#514a40;font-size:13px}
 
 .phone-frame:not(.reader-mode) .brand{font-size:clamp(15px,4.4vw,20px);letter-spacing:.035em!important;white-space:nowrap}
+
+/* VERSO À DEUX: facing pages, a small title page, and quiet book excerpts. */
+.phone-frame:not(.reader-mode) .brand{display:flex;align-items:center;gap:9px;letter-spacing:0!important;flex-shrink:0}
+.brand-mark{width:34px;height:34px;display:block;border-radius:8px}
+.brand-type{display:flex;flex-direction:column;align-items:flex-start;gap:4px;color:#344f45}
+.brand-type>span{font-size:21px;line-height:1;letter-spacing:.13em}
+.brand-type>small{font-family:Georgia,serif;font-size:9px;line-height:1;letter-spacing:.27em}
+.daily-quote{background:transparent;border-radius:0;border-top:1px solid #ddd9cf;border-bottom:1px solid #e7e2d8;padding:15px 2px 22px;margin-top:4px}
+.daily-quote::before{content:none}
+.daily-quote>.daily-heading{font-size:10px;letter-spacing:.16em;color:#8b8275}
+.daily-quote>.daily-heading>span::before{content:'';display:inline-block;width:14px;height:1px;background:#ae7c74;vertical-align:middle;margin-right:9px}
+.quote-open blockquote{font-size:19px;line-height:1.95;letter-spacing:.025em;margin:16px 0 20px;color:#414b42;text-wrap:pretty}
+.quote-open>span{margin-top:0;font-size:11px;letter-spacing:.04em;color:#8b8275}
+@media(max-width:360px){.brand-mark{width:30px;height:30px}.brand-type>span{font-size:19px}.brand-type>small{font-size:8px}.topbar{gap:8px}}

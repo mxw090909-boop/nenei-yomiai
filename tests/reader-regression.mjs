@@ -58,7 +58,7 @@ Object.defineProperty(w.HTMLElement.prototype,'getBoundingClientRect',{value:fun
   const top=index===null?100:240+Number(index)*100-(reader?.scrollTop || 0);
   return {top,bottom:top+100,height:100,left:0,right:400,width:400,x:0,y:top};
 }});
-const bundle=readdirSync('dist/assets').find(f=>f.endsWith('.js'));
+const bundle=readFileSync('dist/index.html','utf8').match(/src="[^"]*\/assets\/([^"]+\.js)"/)[1];
 w.eval(readFileSync('dist/assets/'+bundle,'utf8'));
 const delay=ms=>new Promise(r=>setTimeout(r,ms));
 const until=async(fn)=>{for(let i=0;i<100;i++){if(fn())return;await delay(20);}throw Error('Timed out: '+fn);};
