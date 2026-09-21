@@ -1,3 +1,4 @@
+import { readingStatus } from './reading-status';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import './styles.css';
@@ -15,7 +16,7 @@ const PERSON_AVATAR_KEYS = {
 } as const;
 
 type Page = 'home' | 'shelf' | 'reader' | 'notes' | 'toc' | 'settings';
-type ShelfStatus = '想读' | '正在读' | '已读';
+type ShelfStatus = '未读' | '正在读' | '已读';
 
 type Person = {
   key: 'elior' | 'nenei';
@@ -256,7 +257,7 @@ function Avatar({ person, muted = false }: { person: Person; muted?: boolean }) 
 function Header({ setPage, elior, nenei }: { setPage: (page: Page) => void; elior: Person; nenei: Person }) {
   return (
     <header className='topbar'>
-      <button className='brand' onClick={() => setPage('home')} aria-label='回到首页'>字里，我们</button>
+      <button className='brand' onClick={() => setPage('home')} aria-label='回到首页'>VERSO À DEUX</button>
       <div className='identity-mini'>
         <Avatar person={elior} />
         <Avatar person={nenei} muted />
@@ -309,7 +310,7 @@ function ShelfPage({ books, selectedBookId, onSelectBook, onImport, importing, o
         />
       </div>
       <div className='status-tabs'>
-        {(['想读', '正在读', '已读'] as ShelfStatus[]).map((item) => (
+        {(['未读', '正在读', '已读'] as ShelfStatus[]).map((item) => (
           <button key={item} className={status === item ? 'active' : ''} onClick={() => setStatus(item)}>{item}</button>
         ))}
       </div>
@@ -324,7 +325,7 @@ function ShelfPage({ books, selectedBookId, onSelectBook, onImport, importing, o
               <small>{book.status} · {book.chapterCount} 章{book.progress ? ` · 已读 ${book.progress}%` : ''}</small>
               <div className='mini-progress'><span style={{ width: `${book.progress}%` }} /></div>
             </div>
-          </button>{book.id === selectedBookId && <details className='book-manage'><summary aria-label='管理这本书'>···</summary><label><span>阅读状态</span><select aria-label='书籍状态' value={book.status} onChange={e=>onStatus(e.target.value as ShelfStatus)}>{(['想读','正在读','已读'] as ShelfStatus[]).map(value=><option key={value}>{value}</option>)}</select></label></details>}</div>
+          </button>{book.id === selectedBookId && <details className='book-manage'><summary aria-label='管理这本书'>···</summary><label><span>阅读状态</span><select aria-label='书籍状态' value={book.status} onChange={e=>onStatus(e.target.value as ShelfStatus)}>{(['未读','正在读','已读'] as ShelfStatus[]).map(value=><option key={value}>{value}</option>)}</select></label></details>}</div>
         ))}
         {!filtered.length && <p className='empty-copy'>这里还没有书。</p>}
       </section>
@@ -333,7 +334,7 @@ function ShelfPage({ books, selectedBookId, onSelectBook, onImport, importing, o
 }
 
 function ReaderPage({ book, chapter, chapters, annotations, chapterIndex, setChapterIndex, selectedFont, fontSize, setFontSize, paragraphIndex, setParagraphIndex, setPage, onAddAnnotation, onPosition, initialOffset, onReadNotes, onLoadChapters }: {
-  onPosition: (paragraph: number, offset: number, fraction: number) => void;
+  onPosition: (paragraph: number, offset: number, fraction: number, pastFirstScreen: boolean, atEnd: boolean) => void;
   initialOffset?: number;
   onReadNotes: (notes: Annotation[]) => void;
   onLoadChapters: () => void;
@@ -923,7 +924,7 @@ function App() {
 
   const refreshBooks = async () => {
     const data = await api<{ ok: boolean; books: Book[] }>('/books');
-    setBooks(data.books);
+    setBooks(data.books.map(book => ({ ...book, status: (book.status as string) === '想读' ? '未读' : book.status }))); 
     if (!selectedBookId && data.books[0]) {
       setSelectedBookId(data.books[0].id);
       localStorage.setItem('nenei-yomiai-book', data.books[0].id);
@@ -1074,14 +1075,15 @@ function App() {
     return () => window.removeEventListener('online', retry);
   }, [books.map(book => book.id).join(',')]);
 
-  const savePosition = (paragraph: number, offset: number, fraction: number) => {
+  const savePosition = (paragraph: number, offset: number, fraction: number, pastFirstScreen: boolean, atEnd: boolean) => {
     if (!selectedBook || progressReady !== selectedBook.id) return;
     const book = selectedBook;
-    const percent = book.status === '已读' ? 100 : Math.min(99, Math.max(0, Math.round(((chapterIndex - 1 + fraction) / book.chapterCount) * 100)));
-    const progress: LocalProgress = { chapterIndex, paragraphIndex: paragraph, paragraphOffset: offset, percent, updatedAt: Date.now(), pending: true };
+    const status = readingStatus(book.status, chapterIndex, book.chapterCount, pastFirstScreen, atEnd);
+    const percent = status === '已读' ? 100 : Math.min(99, Math.max(0, Math.round(((chapterIndex - 1 + fraction) / book.chapterCount) * 100)));
+    const progress: LocalProgress = { chapterIndex, paragraphIndex: paragraph, paragraphOffset: offset, percent, status, updatedAt: Date.now(), pending: true };
     rememberFarthest(book.id, progress);
     saveLocalProgress(book.id, progress);
-    setBooks(current => current.map(item => item.id === book.id ? { ...item, progress: percent } : item));
+    setBooks(current => current.map(item => item.id === book.id ? { ...item, progress: percent, status } : item));
     syncProgress(book, progress);
   };
   const changeBookStatus = (status: ShelfStatus) => {

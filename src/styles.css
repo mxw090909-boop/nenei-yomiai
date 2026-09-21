@@ -1068,3 +1068,5 @@ h1, h2, h3, p { margin: 0; }
 .book-manage summary::-webkit-details-marker{display:none}
 .book-manage label{position:absolute;right:0;display:grid;gap:10px;padding:16px;background:#fffefa;border:1px solid #e1dacd;box-shadow:0 8px 24px #302d2812;border-radius:8px;width:170px;font-size:12px;color:#8b8070}
 .book-manage select{padding:8px;background:#f7f4ed;border:1px solid #e1dacd;color:#514a40;font-size:13px}
+
+.phone-frame:not(.reader-mode) .brand{font-size:clamp(15px,4.4vw,20px);letter-spacing:.035em!important;white-space:nowrap}

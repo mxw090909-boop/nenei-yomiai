@@ -5,7 +5,7 @@ type ReaderOptions = {
   paragraphIndex?: number;
   initialOffset?: number;
   fontSize: number;
-  onPosition: (paragraph: number, offset: number, fraction: number) => void;
+  onPosition: (paragraph: number, offset: number, fraction: number, pastFirstScreen: boolean, atEnd: boolean) => void;
 };
 
 // Only scrollTop is read during a gesture. Locate the paragraph after scrolling
@@ -35,7 +35,11 @@ export function useReaderScroll(ref: RefObject<HTMLElement | null>, options: Rea
       }
       const bounds = paragraphs[low].getBoundingClientRect();
       anchor.current = { paragraph: low, offset: Math.max(0, Math.min(1, (top - bounds.top) / Math.max(1, bounds.height))) };
-      onPosition.current(low, anchor.current.offset, (low + anchor.current.offset) / paragraphs.length);
+      const viewport = reader.getBoundingClientRect();
+      const last = paragraphs[paragraphs.length - 1].getBoundingClientRect();
+      const atEnd = reader.clientHeight > 0 && last.bottom <= viewport.top + reader.clientHeight && last.bottom > viewport.top;
+      onPosition.current(low, anchor.current.offset, (low + anchor.current.offset) / paragraphs.length,
+        reader.clientHeight > 0 && reader.scrollTop >= reader.clientHeight * 0.8, atEnd);
     };
     capture.current = locate;
     const flush = () => {

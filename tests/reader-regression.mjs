@@ -1,6 +1,17 @@
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { JSDOM } from 'jsdom';
+import ts from 'typescript';
+const statusModule = ts.transpileModule(readFileSync('src/reading-status.ts','utf8'), {compilerOptions:{module:ts.ModuleKind.ESNext}}).outputText;
+const {readingStatus} = await import('data:text/javascript;base64,'+Buffer.from(statusModule).toString('base64'));
+assert.equal(readingStatus('未读',1,10,false,false),'未读','first screen remains unread');
+assert.equal(readingStatus('未读',1,10,true,false),'正在读','scrolling past first screen starts reading');
+assert.equal(readingStatus('未读',2,10,false,false),'正在读','later chapter starts reading');
+assert.equal(readingStatus('正在读',10,10,true,false),'正在读','last chapter alone does not finish book');
+assert.equal(readingStatus('正在读',10,10,true,true),'已读','visible end completes book');
+assert.equal(readingStatus('已读',1,10,false,false),'已读','rereading preserves completion');
+assert.equal(readingStatus('正在读',1,10,false,false),'正在读','return to beginning preserves started state');
+
 
 const dom = new JSDOM('<div id="root"></div>', { url: 'https://reader.test/nenei-yomiai/', pretendToBeVisual: true, runScripts: 'outside-only' });
 const w = dom.window;
@@ -119,7 +130,7 @@ w.dispatchEvent(new w.Event('focus'));await delay(60);
 select.value='unread';select.dispatchEvent(new w.Event('change',{bubbles:true}));await delay(40);
 assert.ok(w.document.querySelector('.note-card').textContent.includes('刚刚写下的新留言'));
 assert.equal(w.document.querySelectorAll('.note-card').length,1,'old notes are not all marked new');
-await click('字里，我们');
+await click('VERSO À DEUX');
 assert.equal(JSON.parse(w.localStorage.getItem('yomiai-farthest-test-book')).paragraphIndex,17,'quote selection does not advance farthest read position');
 const shelf=[...w.document.querySelectorAll('.bottom-nav button')].find(b=>b.textContent.includes('书架'));shelf.click();await delay(40);
 const status=w.document.querySelector('[aria-label="书籍状态"]');status.value='已读';status.dispatchEvent(new w.Event('change',{bubbles:true}));await delay(60);
@@ -129,7 +140,7 @@ notes.splice(0,notes.length,
 {id:'paired-ai',bookId:'test-book',chapterIndex:2,paragraphIndex:5,quote:'我们都标过的句子',text:'他的留言',author:'ai',createdAt:new Date().toISOString()},
 {id:'paired-me',bookId:'test-book',chapterIndex:2,paragraphIndex:5,quote:'我们都标过的句子',text:'她的留言',author:'nenei',createdAt:new Date().toISOString()},
 {id:'unread-paragraph',bookId:'test-book',chapterIndex:2,paragraphIndex:18,quote:'同章还没读到的句子',text:'不该展示',author:'ai',createdAt:new Date().toISOString()});
-w.dispatchEvent(new w.Event('focus'));await delay(60);await click('字里，我们');
+w.dispatchEvent(new w.Event('focus'));await delay(60);await click('VERSO À DEUX');
 assert.equal(w.document.querySelector('.quote-open blockquote').textContent,'我们都标过的句子');
 assert.equal(button('换一句'),undefined,'duplicate quotations are one candidate');
 w.document.querySelector('.quote-open').click();await delay(40);
