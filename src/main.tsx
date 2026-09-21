@@ -708,7 +708,7 @@ function NotesPage({ book, annotations, onOpen, isUnread }: { book?: Book; annot
   const [author, setAuthor] = useState('all');
   const [chapterFilter, setChapterFilter] = useState('all');
   const [keyword, setKeyword] = useState('');
-  const filtered = annotations.filter(note => (author === 'all' || note.author === author || (author === 'unread' && isUnread(note))) && (chapterFilter === 'all' || note.chapterIndex === Number(chapterFilter)) && `${note.text} ${note.quote || ''}`.includes(keyword.trim()));
+  const filtered = annotations.filter(note => (author === 'all' || note.author === author || (author === 'unread' && isUnread(note))) && (chapterFilter === 'all' || note.chapterIndex === Number(chapterFilter)) && `${note.text} ${note.quote || ''}`.includes(keyword.trim())).sort((a, b) => a.chapterIndex - b.chapterIndex || (a.paragraphIndex ?? Number.MAX_SAFE_INTEGER) - (b.paragraphIndex ?? Number.MAX_SAFE_INTEGER) || Date.parse(a.createdAt) - Date.parse(b.createdAt));
   return <main className='screen notes-screen'>
     <div className='screen-title'><h1>页边</h1><p>{book?.title || '未选择书本'} · {annotations.length} 条</p></div>
     <details className="note-filter-panel"><summary>筛选</summary>

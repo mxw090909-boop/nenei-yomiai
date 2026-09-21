@@ -122,6 +122,7 @@ reader=w.document.querySelector('.reader-screen');assert.equal(reader.scrollTop,
 w.document.querySelector('[aria-label="回到首页"]').click();await delay(40);
 const nav=[...w.document.querySelectorAll('.bottom-nav button')].find(b=>b.textContent.includes('页边'));nav.click();await delay(50);
 assert.equal(w.document.querySelectorAll('.note-card').length,4,'notes cover the whole book');
+assert.deepEqual([...w.document.querySelectorAll('.note-card > p')].map(p=>p.textContent),['第一章的留言','第二章的留言','保留我的草稿','未来章节不应出现在首页'],'notes interleave authors in book order');
 assert.equal(w.document.querySelector('[aria-label="章节批注"]'),null,'notes page is for revisiting');
 const select=w.document.querySelector('[aria-label="批注作者"]');select.value='nenei';select.dispatchEvent(new w.Event('change',{bubbles:true}));await delay(40);
 assert.equal(w.document.querySelectorAll('.note-card').length,1,'author filter works');
