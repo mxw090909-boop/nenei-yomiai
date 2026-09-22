@@ -293,11 +293,12 @@ function ShelfPage({ books, selectedBookId, onSelectBook, onImport, importing, o
   const filtered = books.filter((book) => book.status === status);
 
   return (
-    <main className='screen shelf-screen'>
-      <div className='screen-title inline'>
-        <div>
-          <h1>书架</h1>
-
+    <main className='screen shelf-screen' aria-label='书架'>
+      <div className='shelf-toolbar'>
+        <div className='status-tabs'>
+          {(['未读', '正在读', '已读'] as ShelfStatus[]).map((item) => (
+            <button key={item} className={status === item ? 'active' : ''} onClick={() => setStatus(item)}>{item}</button>
+          ))}
         </div>
         <button className='text-button' onClick={() => inputRef.current?.click()} disabled={importing}>
           {importing ? '导入中' : '导入'}
@@ -313,11 +314,6 @@ function ShelfPage({ books, selectedBookId, onSelectBook, onImport, importing, o
             event.currentTarget.value = '';
           }}
         />
-      </div>
-      <div className='status-tabs'>
-        {(['未读', '正在读', '已读'] as ShelfStatus[]).map((item) => (
-          <button key={item} className={status === item ? 'active' : ''} onClick={() => setStatus(item)}>{item}</button>
-        ))}
       </div>
 
       <section className='book-list'>
@@ -714,8 +710,8 @@ function NotesPage({ book, annotations, onOpen, isUnread }: { book?: Book; annot
   const [chapterFilter, setChapterFilter] = useState('all');
   const [keyword, setKeyword] = useState('');
   const filtered = annotations.filter(note => (author === 'all' || note.author === author || (author === 'unread' && isUnread(note))) && (chapterFilter === 'all' || note.chapterIndex === Number(chapterFilter)) && `${note.text} ${note.quote || ''}`.includes(keyword.trim())).sort((a, b) => a.chapterIndex - b.chapterIndex || (a.paragraphIndex ?? Number.MAX_SAFE_INTEGER) - (b.paragraphIndex ?? Number.MAX_SAFE_INTEGER) || Date.parse(a.createdAt) - Date.parse(b.createdAt));
-  return <main className='screen notes-screen'>
-    <div className='screen-title'><h1>页边</h1><p>{book?.title || '未选择书本'} · {annotations.length} 条</p></div>
+  return <main className='screen notes-screen' aria-label='页边'>
+    <p className='notes-context'><span>{book?.title || '未选择书本'}</span><small>{annotations.length} 条页边</small></p>
     <details className="note-filter-panel"><summary>筛选</summary>
     <div className='note-filters'>
       <select aria-label='批注作者' value={author} onChange={e => setAuthor(e.target.value)}><option value='all'>我们两人</option><option value='ai'>Elior</option><option value='nenei'>Nenei</option><option value='unread'>未读留言</option></select>
@@ -780,17 +776,13 @@ function SettingsPage({ elior, nenei, setElior, setNenei, accent, setAccent, fon
   const updatePerson = (person: Person, setter: (person: Person) => void, patch: Partial<Person>) => setter({ ...person, ...patch });
 
   return (
-    <main className='screen settings-screen'>
-      <div className='screen-title centered'>
-        <h1>设置</h1>
-        <p>我们</p>
-      </div>
+    <main className='screen settings-screen' aria-label='设置'>
+      <details className='settings-group'><summary>我们</summary>
       <section className='pair-card'>
         <Avatar person={elior} />
         <span>×</span>
         <Avatar person={nenei} muted />
       </section>
-      <details className='settings-group'><summary>我们</summary>
       <PersonEditor label='Elior' person={elior} onChange={(patch) => updatePerson(elior, setElior, patch)} />
       <PersonEditor label='Nenei' person={nenei} onChange={(patch) => updatePerson(nenei, setNenei, patch)} />
       </details>
