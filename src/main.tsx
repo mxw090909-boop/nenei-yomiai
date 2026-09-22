@@ -257,7 +257,12 @@ function Avatar({ person, muted = false }: { person: Person; muted?: boolean }) 
 function Header({ setPage, elior, nenei }: { setPage: (page: Page) => void; elior: Person; nenei: Person }) {
   return (
     <header className='topbar'>
-      <button className='brand' onClick={() => setPage('home')} aria-label='回到首页'><img className='brand-mark' src='/nenei-yomiai/verso-icon.svg' alt='' /><span className='brand-type'><span>VERSO</span>{' '}<small>À DEUX</small></span></button>
+      <button className='brand' onClick={() => setPage('home')} aria-label='回到首页'><svg className='brand-mark' viewBox='0 0 512 512' aria-hidden='true' focusable='false'>
+        <rect width='512' height='512' rx='112' fill='#f7f4ec' />
+        <path d='M115 139c48-7 92 10 124 43v191c-34-34-77-51-124-43zM397 139c-48-7-92 10-124 43v191c34-34 77-51 124-43z' fill='currentColor' />
+        <path d='M148 174c25 1 46 8 64 21M148 200c25 1 46 8 64 21M364 174c-25 1-46 8-64 21' fill='none' stroke='#f7f4ec' strokeWidth='7' strokeLinecap='round' opacity='.6' />
+        <path d='M250 192h12v163l-6-7-6 7z' fill='currentColor' opacity='.55' />
+      </svg><span className='brand-type'><span>VERSO</span>{' '}<small>À DEUX</small></span></button>
       <div className='identity-mini'>
         <Avatar person={elior} />
         <Avatar person={nenei} muted />
@@ -882,7 +887,15 @@ function BottomNav({ page, setPage }: { page: Page; setPage: (page: Page) => voi
 
 function App() {
   const [page, setPage] = useState<Page>('home');
-  const [accent, setAccent] = useState('#111111');
+  const [accent, setAccent] = useState(() => {
+    try {
+      const saved = localStorage.getItem('yomiai-accent');
+      return saved && /^#[0-9a-f]{6}$/i.test(saved) ? saved : '#111111';
+    } catch { return '#111111'; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem('yomiai-accent', accent); } catch { /* Keep theme usable when storage is unavailable. */ }
+  }, [accent]);
   const [elior, setElior] = useState<Person>({ key: 'elior', name: 'Elior', avatar: '' });
   const [nenei, setNenei] = useState<Person>({ key: 'nenei', name: 'Nenei', avatar: '' });
   const [books, setBooks] = useState<Book[]>([]);

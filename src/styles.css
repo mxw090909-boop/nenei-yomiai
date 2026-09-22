@@ -1073,8 +1073,8 @@ h1, h2, h3, p { margin: 0; }
 
 /* VERSO À DEUX: facing pages, a small title page, and quiet book excerpts. */
 .phone-frame:not(.reader-mode) .brand{display:flex;align-items:center;gap:9px;letter-spacing:0!important;flex-shrink:0}
-.brand-mark{width:34px;height:34px;display:block;border-radius:8px}
-.brand-type{display:flex;flex-direction:column;align-items:flex-start;gap:4px;color:#344f45}
+.brand-mark{width:34px;height:34px;display:block;border-radius:8px;color:var(--accent);flex-shrink:0}
+.brand-type{display:flex;flex-direction:column;align-items:flex-start;gap:4px;color:var(--accent)}
 .brand-type>span{font-size:21px;line-height:1;letter-spacing:.13em}
 .brand-type>small{font-family:Georgia,serif;font-size:9px;line-height:1;letter-spacing:.27em}
 .daily-quote{background:transparent;border-radius:0;border-top:1px solid #ddd9cf;border-bottom:1px solid #e7e2d8;padding:15px 2px 22px;margin-top:4px}
