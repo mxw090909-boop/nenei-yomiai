@@ -1,4 +1,6 @@
 import { readingStatus } from './reading-status';
+import { useRemembered, usePagePosition, groupNotes } from './page-memory';
+import { BackupSettings, useAutoBackup } from './device-backup';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import './styles.css';
@@ -288,12 +290,13 @@ function ShelfPage({ books, selectedBookId, onSelectBook, onImport, importing, o
   importing: boolean;
   onStatus: (status: ShelfStatus) => void;
 }) {
-  const [status, setStatus] = useState<ShelfStatus>('正在读');
+  const [status, setStatus] = useRemembered<ShelfStatus>('yomiai-view-shelf-status', '正在读');
+  const shelfRef = usePagePosition(`yomiai-view-shelf-${status}`, books.length > 0);
   const inputRef = useRef<HTMLInputElement>(null);
   const filtered = books.filter((book) => book.status === status);
 
   return (
-    <main className='screen shelf-screen' aria-label='书架'>
+    <main ref={shelfRef} className='screen shelf-screen' aria-label='书架'>
       <div className='shelf-toolbar'>
         <div className='status-tabs'>
           {(['未读', '正在读', '已读'] as ShelfStatus[]).map((item) => (
@@ -316,7 +319,7 @@ function ShelfPage({ books, selectedBookId, onSelectBook, onImport, importing, o
         />
       </div>
 
-      <section className='book-list'>
+      <section className={'book-list' + (status === '已读' ? ' cover-wall' : '')}>
         {filtered.map((book) => (
           <div className='shelf-entry' key={book.id}><button className={'book-row ' + (book.id === selectedBookId ? 'selected' : '')} key={book.id} onClick={() => onSelectBook(book.id)}>
             <Cover book={book} />
@@ -706,20 +709,27 @@ function ReaderPage({ book, chapter, chapters, annotations, chapterIndex, setCha
 
 
 function NotesPage({ book, annotations, onOpen, isUnread }: { book?: Book; annotations: Annotation[]; onOpen: (note: Annotation) => void; isUnread: (note: Annotation) => boolean }) {
-  const [author, setAuthor] = useState('all');
-  const [chapterFilter, setChapterFilter] = useState('all');
-  const [keyword, setKeyword] = useState('');
+  const viewKey = `yomiai-view-notes-${book?.id || 'none'}`;
+  const [author, setAuthor] = useRemembered(viewKey + '-author', 'all');
+  const [chapterFilter, setChapterFilter] = useRemembered(viewKey + '-chapter', 'all');
+  const [keyword, setKeyword] = useRemembered(viewKey + '-keyword', '');
+  const [filterOpen, setFilterOpen] = useRemembered(viewKey + '-open', false);
+  const notesRef = usePagePosition(`${viewKey}-${author}-${chapterFilter}-${keyword}`, annotations.length > 0);
   const filtered = annotations.filter(note => (author === 'all' || note.author === author || (author === 'unread' && isUnread(note))) && (chapterFilter === 'all' || note.chapterIndex === Number(chapterFilter)) && `${note.text} ${note.quote || ''}`.includes(keyword.trim())).sort((a, b) => a.chapterIndex - b.chapterIndex || (a.paragraphIndex ?? Number.MAX_SAFE_INTEGER) - (b.paragraphIndex ?? Number.MAX_SAFE_INTEGER) || Date.parse(a.createdAt) - Date.parse(b.createdAt));
-  return <main className='screen notes-screen' aria-label='页边'>
+  return <main ref={notesRef} className='screen notes-screen' aria-label='页边'>
     <p className='notes-context'><span>{book?.title || '未选择书本'}</span><small>{annotations.length} 条页边</small></p>
-    <details className="note-filter-panel"><summary>筛选</summary>
+    <details className="note-filter-panel" open={filterOpen} onToggle={e => setFilterOpen(e.currentTarget.open)}><summary>筛选</summary>
     <div className='note-filters'>
       <select aria-label='批注作者' value={author} onChange={e => setAuthor(e.target.value)}><option value='all'>我们两人</option><option value='ai'>Elior</option><option value='nenei'>Nenei</option><option value='unread'>未读留言</option></select>
       <select aria-label='批注章节' value={chapterFilter} onChange={e => setChapterFilter(e.target.value)}><option value='all'>所有章节</option>{[...new Set(annotations.map(n => n.chapterIndex))].sort((a,b) => a-b).map(n => <option key={n} value={n}>第 {n} 章</option>)}</select>
       <input aria-label='搜索批注' value={keyword} onChange={e => setKeyword(e.target.value)} placeholder='找一句话或一个想法' />
     </div>
     </details>
-    {filtered.map(note => <article className='note-card' data-author={note.author} key={note.id}><div className='note-head'><strong>{note.author === 'ai' ? 'Elior' : 'Nenei'}{isUnread(note) ? ' · 未读' : ''}</strong></div>{note.quote && <blockquote>{note.quote}</blockquote>}<p>{note.text}</p><footer><small>第 {note.chapterIndex} 章 · {new Date(note.createdAt).toLocaleDateString()}</small><button onClick={() => onOpen(note)}>回到原文</button></footer></article>)}
+    {groupNotes(filtered).map(({key, entries}) => <section className='note-thread' key={key}>
+      {entries[0].quote && <blockquote>{entries[0].quote}</blockquote>}
+      {entries.map(note => <article className='note-card' data-author={note.author} key={note.id}><div className='note-head'><strong>{note.author === 'ai' ? 'Elior' : 'Nenei'}{isUnread(note) ? ' · 未读' : ''}</strong><small>{new Date(note.createdAt).toLocaleDateString()}</small></div><p>{note.text}</p></article>)}
+      <footer><small>第 {entries[0].chapterIndex} 章</small><button onClick={() => onOpen(entries[0])}>回到原文</button></footer>
+    </section>)}
     {!filtered.length && <p className='empty-copy'>这里还没有符合条件的页边。</p>}
   </main>;
 }
@@ -774,10 +784,13 @@ function SettingsPage({ elior, nenei, setElior, setNenei, accent, setAccent, fon
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const updatePerson = (person: Person, setter: (person: Person) => void, patch: Partial<Person>) => setter({ ...person, ...patch });
+  const [peopleOpen, setPeopleOpen] = useRemembered('yomiai-view-settings-people', false);
+  const [appearanceOpen, setAppearanceOpen] = useRemembered('yomiai-view-settings-appearance', true);
+  const settingsRef = usePagePosition('yomiai-view-settings-scroll');
 
   return (
-    <main className='screen settings-screen' aria-label='设置'>
-      <details className='settings-group'><summary>我们</summary>
+    <main ref={settingsRef} className='screen settings-screen' aria-label='设置'>
+      <details className='settings-group' open={peopleOpen} onToggle={e => setPeopleOpen(e.currentTarget.open)}><summary>我们</summary>
       <section className='pair-card'>
         <Avatar person={elior} />
         <span>×</span>
@@ -786,7 +799,7 @@ function SettingsPage({ elior, nenei, setElior, setNenei, accent, setAccent, fon
       <PersonEditor label='Elior' person={elior} onChange={(patch) => updatePerson(elior, setElior, patch)} />
       <PersonEditor label='Nenei' person={nenei} onChange={(patch) => updatePerson(nenei, setNenei, patch)} />
       </details>
-      <details className='settings-group' open><summary>阅读外观</summary>
+      <details className='settings-group' open={appearanceOpen} onToggle={e => setAppearanceOpen(e.currentTarget.open)}><summary>阅读外观</summary>
       <details className='appearance-more'><summary>背景图片</summary><BackgroundSettings /></details>
       <section className='settings-card'>
         <h2>主题色</h2>
@@ -828,6 +841,7 @@ function SettingsPage({ elior, nenei, setElior, setNenei, accent, setAccent, fon
         </label>
       </section>
       </details>
+      <BackupSettings />
     </main>
   );
 }
@@ -878,6 +892,7 @@ function BottomNav({ page, setPage }: { page: Page; setPage: (page: Page) => voi
 }
 
 function App() {
+  useAutoBackup();
   const [page, setPage] = useState<Page>('home');
   const [accent, setAccent] = useState(() => {
     try {
@@ -1178,7 +1193,7 @@ function App() {
         }} onImport={importBook} importing={importing} />}
         {page === 'reader' && (progressReady !== selectedBook?.id || !chapter || chapter.bookId !== selectedBook?.id || chapter.chapterIndex !== chapterIndex) && <main className='screen'><p>正在打开书页…</p><button className='text-button' onClick={() => setChapterRetry(value => value + 1)}>重新加载</button></main>}
         {page === 'reader' && progressReady === selectedBook?.id && chapter?.bookId === selectedBook?.id && chapter?.chapterIndex === chapterIndex && <ReaderPage key={`${selectedBook?.id}-${chapterIndex}`} initialOffset={initialOffset} onPosition={savePosition} onReadNotes={markRead} onLoadChapters={() => setSearchRequested(true)} book={selectedBook} chapter={chapter} chapters={chapters} annotations={annotations.filter(note => note.chapterIndex === chapterIndex)} chapterIndex={chapterIndex} setChapterIndex={index => { setInitialOffset(0); setChapterIndex(index); }} selectedFont={selectedFont} fontSize={fontSize} setFontSize={setFontSize} paragraphIndex={paragraphIndex} setParagraphIndex={setParagraphIndex} setPage={setPage} onAddAnnotation={addAnnotation} />}
-        {page === 'notes' && <NotesPage book={selectedBook} annotations={annotations} onOpen={openNote} isUnread={isUnread} />}
+        {page === 'notes' && <NotesPage key={selectedBook?.id} book={selectedBook} annotations={annotations} onOpen={openNote} isUnread={isUnread} />}
         {page === 'toc' && <TocPage book={selectedBook} chapters={chapters} chapterIndex={chapterIndex} setChapterIndex={index => { setParagraphIndex(undefined); setInitialOffset(0); setChapterIndex(index); }} setPage={setPage} />}
         {page === 'settings' && <SettingsPage elior={elior} nenei={nenei} setElior={setElior} setNenei={setNenei} accent={accent} setAccent={setAccent} fonts={fonts} selectedFont={selectedFont} setSelectedFont={setSelectedFont} onImportFont={importFont} />}
         {page !== 'reader' && <BottomNav page={page} setPage={setPage} />}

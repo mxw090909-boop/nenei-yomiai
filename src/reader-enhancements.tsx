@@ -115,6 +115,5 @@ export function BackgroundSettings() {
     <div className='settings-head'><h2>背景设置</h2><button onClick={() => { setHome(''); setReader(''); update(HOME_KEY, ''); update(READER_KEY, ''); }}>恢复默认</button></div>
     <label className='field'><span>主页背景图 URL</span><input value={home} onChange={e => { setHome(e.target.value); update(HOME_KEY, e.target.value); }} placeholder='https://…' /></label>
     <label className='field'><span>阅读器背景图 URL</span><input value={reader} onChange={e => { setReader(e.target.value); update(READER_KEY, e.target.value); }} placeholder='https://…' /></label>
-    <small>仅保存在此设备。</small>
   </section>;
 }

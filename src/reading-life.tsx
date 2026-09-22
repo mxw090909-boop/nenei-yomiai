@@ -60,7 +60,9 @@ export function ReadingTime({ bookId }: { bookId: string }) {
     return () => { clearInterval(timer); window.removeEventListener('focus', refresh); window.removeEventListener('storage', refresh); };
   }, []);
   const today = Object.values(stats[dayKey()] || {}).reduce((a,b)=>a+b,0);
-  return <div className='reading-time'><button onClick={()=>setOpen(!open)} aria-expanded={open}>今天读了 {duration(today)}</button>{open && <div className='time-detail'><p>这本书 · {duration(Object.values(stats).reduce((sum, day)=>sum+(day[bookId] || 0),0))}</p>{Array.from({length:7},(_,i)=>{const date = new Date();date.setDate(date.getDate()-6+i);const key=dayKey(date);return <div className='time-day' key={key}><span>{date.getMonth()+1}/{date.getDate()}</span><span>{duration(Object.values(stats[key] || {}).reduce((a,b)=>a+b,0))}</span></div>;})}<small>此设备 · 从现在开始记录</small></div>}</div>;
+  const week=Array.from({length:7},(_,i)=>{const date=new Date();date.setDate(date.getDate()-6+i);const key=dayKey(date);return {key,date,total:Object.values(stats[key]||{}).reduce((a,b)=>a+b,0)};});
+  const max=Math.max(60000,...week.map(day=>day.total));
+  return <div className='reading-time'><button onClick={()=>setOpen(!open)} aria-expanded={open}>今天读了 {duration(today)}</button>{open && <div className='time-detail'><p>这本书 · {duration(Object.values(stats).reduce((sum, day)=>sum+(day[bookId] || 0),0))}</p><div className='reading-week'>{week.map(({key,date,total})=><div className={'reading-day'+(key===dayKey()?' today':'')} key={key} aria-label={`${date.getMonth()+1}月${date.getDate()}日，${duration(total)}`}><span>{['日','一','二','三','四','五','六'][date.getDay()]}</span><div className='day-track'><i style={{height:`${total ? Math.max(5,total/max*100):0}%`}} /></div><strong>{total ? Math.max(1,Math.floor(total/60000)) : '—'}</strong><small>{date.getMonth()+1}/{date.getDate()}</small></div>)}</div><small>近七天 · 分钟 · 不足一分钟记作 1</small></div>}</div>;
 }
 export function DailyQuote({ bookId, title, notes, onOpen, onRead }: { bookId: string; title: string; notes: Note[]; onOpen: (note: Note)=>void; onRead: (notes: Note[])=>void }) {
   const [day, setDay] = useState(dayKey());

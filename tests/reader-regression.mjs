@@ -147,5 +147,18 @@ assert.equal(button('换一句'),undefined,'duplicate quotations are one candida
 w.document.querySelector('.quote-open').click();await delay(40);
 assert.equal(w.document.querySelectorAll('.daily-sheet .thread-note').length,2,'both authors appear in quote thread');
 assert.ok(!w.document.querySelector('.daily-sheet').textContent.includes('不该展示'));
+w.document.querySelector('[aria-label="关闭页边"]').click();await delay(40);
+await click('页边');
+const authorFilter=w.document.querySelector('[aria-label="批注作者"]');
+authorFilter.value='all';authorFilter.dispatchEvent(new w.Event('change',{bubbles:true}));await delay(40);
+assert.equal(w.document.querySelectorAll('.note-thread').length,2,'same-location quotes grouped');
+assert.equal(w.document.querySelectorAll('.note-thread')[0].querySelectorAll('.note-card').length,2,'both notes retained in thread');
+assert.equal(w.document.querySelectorAll('.note-thread')[0].querySelectorAll('blockquote').length,1,'quote shown once');
+const notesScreen=w.document.querySelector('.notes-screen');notesScreen.scrollTop=420;notesScreen.dispatchEvent(new w.Event('scroll'));await click('首页');await click('页边');
+assert.equal(w.document.querySelector('.notes-screen').scrollTop,420,'notes position restored after navigation');
+await click('书架');await click('已读');await click('首页');await click('书架');
+assert.ok(w.document.querySelector('.status-tabs button.active').textContent==='已读','shelf category remembered');
+assert.ok(w.document.querySelector('.cover-wall'),'read books use cover wall');
+await click('设置');assert.ok(w.document.querySelector('.backup-settings'),'backup controls available');
 console.log('PASS: reading timer, idle/background/suspend pause, daily quote persistence, paragraph cutoff, deduplication and paired notes; remote restore, no startup writes, smooth gesture, scroll bookmark, selection isolation, per-quote drafts, failed-save recovery, duplicate guard, search, return-to-reading, whole-book notes, filters, new-note refresh.');
 dom.window.close();
