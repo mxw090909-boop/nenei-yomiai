@@ -1179,23 +1179,3 @@ h1, h2, h3, p { margin: 0; }
   border-color:var(--paper-edge);
 }
 @media(prefers-reduced-motion:reduce){.continue-book{transition:none}.continue-book:active{transform:none}}
-
-/* The background reaches behind iOS chrome; controls stay in the safe area. */
-@media(max-width:480px){
-  .phone-frame:not(.reader-mode) .topbar{
-    height:calc(64px + env(safe-area-inset-top,0px));
-    padding-top:calc(10px + env(safe-area-inset-top,0px));
-  }
-  .phone-frame:not(.reader-mode) .screen{
-    top:calc(64px + env(safe-area-inset-top,0px));
-    bottom:calc(78px + env(safe-area-inset-bottom,0px));
-  }
-  .bottom-nav{
-    height:calc(78px + env(safe-area-inset-bottom,0px));
-    padding-bottom:env(safe-area-inset-bottom,0px);
-  }
-  .phone-frame.reader-mode .reader-screen{
-    inset:env(safe-area-inset-top,0px) 0 0!important;
-    padding-bottom:calc(22px + env(safe-area-inset-bottom,0px))!important;
-  }
-}
