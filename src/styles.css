@@ -981,8 +981,8 @@ h1, h2, h3, p { margin: 0; }
 .note-card footer button { text-decoration:underline; }
 .app-notice,.reader-error { position:absolute; z-index:1500; bottom:90px; left:14px; right:14px; padding:12px; background:#fff2dc; border:1px solid #cbb997; font-size:13px; }
 .has-yomiai-home-bg .phone-frame:not(.reader-mode)::after,.has-yomiai-reader-bg .phone-frame.reader-mode::after { content:'';position:absolute;inset:0;pointer-events:none;background-size:cover;background-position:center;z-index:0; }
-.has-yomiai-home-bg .phone-frame:not(.reader-mode)::after { background-image:linear-gradient(rgba(250,250,247,.64),rgba(250,250,247,.76)),var(--yomiai-home-bg); }
-.has-yomiai-reader-bg .phone-frame.reader-mode::after { background-image:linear-gradient(rgba(255,254,250,.82),rgba(255,254,250,.92)),var(--yomiai-reader-bg); }
+.has-yomiai-home-bg .phone-frame:not(.reader-mode)::after { background-image:linear-gradient(rgba(250,250,247,.24),rgba(250,250,247,.32)),var(--yomiai-home-bg); }
+.has-yomiai-reader-bg .phone-frame.reader-mode::after { background-image:linear-gradient(rgba(250,250,247,.30),rgba(250,250,247,.38)),var(--yomiai-reader-bg); }
 
 /* Shared header keeps the same compact rhythm outside the reader. */
 .phone-frame:not(.reader-mode) .topbar{height:64px;padding:10px 20px;background:rgba(250,250,247,.92);-webkit-backdrop-filter:none;backdrop-filter:none}
@@ -1151,7 +1151,7 @@ h1, h2, h3, p { margin: 0; }
 }
 .phone-frame:not(.reader-mode) .topbar,
 .phone-frame:not(.reader-mode) .bottom-nav{
-  background-color:rgba(250,250,247,.92);
+  background-color:rgba(250,250,247,.75);
   background-image:var(--paper-grain);
   border-color:rgba(105,111,101,.13);
   -webkit-backdrop-filter:none;
@@ -1160,7 +1160,7 @@ h1, h2, h3, p { margin: 0; }
 .phone-frame:not(.reader-mode) .topbar{box-shadow:0 2px 7px #343b3204}
 .phone-frame:not(.reader-mode) .bottom-nav{box-shadow:0 -2px 8px #343b3204}
 .continue-book{
-  background-color:rgba(250,250,247,.88);
+  background-color:rgba(250,250,247,.58);
   background-image:var(--paper-grain),linear-gradient(115deg,#ffffff70,#ffffff00 65%);
   border-color:var(--paper-edge);
   border-radius:5px 8px 5px 5px;
