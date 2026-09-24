@@ -46,7 +46,8 @@ export async function snapshot(): Promise<Snapshot> {
   const local: Record<string,string> = {};
   Object.keys(localStorage).filter(ownKey).sort().forEach(key=>{local[key]=localStorage.getItem(key)!;});
   const appearance=await rows(0);
-  const fonts=await Promise.all((await rows(1)).map(async ({blob,...font})=>({...font,data:blob ? await blob64(blob) : ''})));
+  const fonts: Row[]=[];
+  for (const {blob,...font} of await rows(1)) fonts.push({...font,data:blob ? await blob64(blob) : ''});
   return {version:1,createdAt:new Date().toISOString(),local,appearance,fonts};
 }
 export function validateSnapshot(value: unknown): asserts value is Snapshot {
@@ -100,7 +101,7 @@ export async function saveCloud() {
   busy=true;
   try {
     const s=await snapshot();
-    const fingerprint=JSON.stringify([s.local,s.appearance,s.fonts]);
+    const fingerprint=hex(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify([s.local,s.appearance,s.fonts])))));
     if (fingerprint===lastFingerprint) return;
     const {id,key}=await credentials(secret());
     const iv=crypto.getRandomValues(new Uint8Array(12));
@@ -109,7 +110,7 @@ export async function saveCloud() {
     if (!response.ok) throw Error('云端暂时未能保存');
     lastFingerprint=fingerprint;
     report('已备份 · '+new Date().toLocaleString());
-  } catch (error) { report('尚未备份成功 · 稍后自动重试'); throw error; }
+  } catch (error) { report('尚未备份成功 · 请稍后重试'); throw error; }
   finally { busy=false; }
 }
 export async function readCloud(code: string): Promise<Snapshot> {
@@ -122,28 +123,20 @@ export async function readCloud(code: string): Promise<Snapshot> {
     const result=JSON.parse(new TextDecoder().decode(clear));validateSnapshot(result);return result;
   } catch { throw Error('恢复码不匹配，或备份数据不完整'); }
 }
-export function useAutoBackup() {
-  useEffect(()=>{
-    const save=()=>{ if (!document.hidden) void saveCloud().catch(()=>{}); };
-    const start=window.setTimeout(save,15000), timer=window.setInterval(save,60000);
-    window.addEventListener('online',save);
-    return()=>{clearTimeout(start);clearInterval(timer);window.removeEventListener('online',save);};
-  },[]);
-}
 function download(s: Snapshot, prefix='verso-backup') {
   const url=URL.createObjectURL(new Blob([JSON.stringify(s)],{type:'application/json'}));
   const a=document.createElement('a');a.href=url;a.download=prefix+'-'+new Date().toISOString().slice(0,10)+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
 export function BackupSettings() {
-  const [status,setStatus]=useState(localStorage.getItem(STATUS)||'等待自动备份');
+  const [status,setStatus]=useState(localStorage.getItem(STATUS)||'尚无设备备份');
   const [code,setCode]=useState(''), [ownCode,setOwnCode]=useState('');
   const [pending,setPending]=useState<Snapshot|null>(null), [working,setWorking]=useState(false), [error,setError]=useState('');
   const input=useRef<HTMLInputElement>(null);
-  useEffect(()=>{const update=()=>setStatus(localStorage.getItem(STATUS)||'等待自动备份');window.addEventListener('yomiai-backup-change',update);return()=>window.removeEventListener('yomiai-backup-change',update);},[]);
+  useEffect(()=>{const update=()=>setStatus(localStorage.getItem(STATUS)||'尚无设备备份');window.addEventListener('yomiai-backup-change',update);return()=>window.removeEventListener('yomiai-backup-change',update);},[]);
   const run=async(fn:()=>Promise<void>)=>{setWorking(true);setError('');try{await fn();}catch(e){setError(e instanceof Error?e.message:'操作失败，请重试');}finally{setWorking(false);}};
   return <details className='settings-group backup-settings'><summary>同步与备份</summary>
     <p className='backup-status' role='status'>{status}</p>
-    <small>书籍、已提交页边与进度实时同步。此设备的时长、外观、字体和草稿自动云备份；换设备时用恢复码取回。</small>
+    <small>书籍、已提交页边与进度实时同步。时长、外观、字体和草稿点「立即备份」保存，换设备时用恢复码取回。</small>
     <div className='backup-actions'><button disabled={working} onClick={()=>run(saveCloud)}>立即备份</button><button disabled={working} onClick={()=>run(async()=>download(await snapshot()))}>导出文件</button><button disabled={working} onClick={()=>input.current?.click()}>导入文件</button></div>
     <input ref={input} className='hidden-input' type='file' accept='.json,application/json' onChange={e=>{const file=e.target.files?.[0];e.target.value='';if(file)void run(async()=>{const s=JSON.parse(await file.text());validateSnapshot(s);setPending(s);});}} />
     <details className='appearance-more'><summary onClick={()=>{try{setOwnCode(secret());}catch{setError('无法生成恢复码');}}}>此设备恢复码</summary><p className='recovery-code'>{ownCode}</p><small>保存到你自己的备忘录；拥有恢复码即可读取这份备份。</small></details>

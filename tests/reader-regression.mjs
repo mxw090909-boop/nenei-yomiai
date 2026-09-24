@@ -62,7 +62,7 @@ const bundle=readFileSync('dist/index.html','utf8').match(/src="[^"]*\/assets\/(
 w.eval(readFileSync('dist/assets/'+bundle,'utf8'));
 const delay=ms=>new Promise(r=>setTimeout(r,ms));
 const until=async(fn)=>{for(let i=0;i<100;i++){if(fn())return;await delay(20);}throw Error('Timed out: '+fn);};
-const button=text=>[...w.document.querySelectorAll('button')].find(b=>b.textContent.trim()===text);
+const button=text=>[...w.document.querySelectorAll('button')].find(b=>(b.getAttribute('aria-label')||b.textContent.trim())===text);
 const click=async(text)=>{assert.ok(button(text),'button '+text);button(text).click();await delay(40);};
 const input=(el,value)=>{const proto=el.tagName==='TEXTAREA'?w.HTMLTextAreaElement.prototype:w.HTMLInputElement.prototype;Object.getOwnPropertyDescriptor(proto,'value').set.call(el,value);el.dispatchEvent(new w.Event('input',{bubbles:true}));};
 await until(()=>button('继续阅读') && w.document.querySelector('.quote-open'));
@@ -120,7 +120,7 @@ assert.equal(w.localStorage.getItem('yomiai-daily-test-book'),daily,'daily quote
 await click('继续阅读');await delay(100);
 reader=w.document.querySelector('.reader-screen');assert.equal(reader.scrollTop,1816,'returning resumes last scroll');
 w.document.querySelector('[aria-label="回到首页"]').click();await delay(40);
-const nav=[...w.document.querySelectorAll('.bottom-nav button')].find(b=>b.textContent.includes('页边'));nav.click();await delay(50);
+const nav=w.document.querySelector('.bottom-nav [aria-label="页边"]');nav.click();await delay(50);
 assert.equal(w.document.querySelectorAll('.note-card').length,4,'notes cover the whole book');
 assert.deepEqual([...w.document.querySelectorAll('.note-card > p')].map(p=>p.textContent),['第一章的留言','第二章的留言','保留我的草稿','未来章节不应出现在首页'],'notes interleave authors in book order');
 assert.equal(w.document.querySelector('[aria-label="章节批注"]'),null,'notes page is for revisiting');
@@ -133,7 +133,7 @@ assert.ok(w.document.querySelector('.note-card').textContent.includes('刚刚写
 assert.equal(w.document.querySelectorAll('.note-card').length,1,'old notes are not all marked new');
 await click('VERSO À DEUX');
 assert.equal(JSON.parse(w.localStorage.getItem('yomiai-farthest-test-book')).paragraphIndex,17,'quote selection does not advance farthest read position');
-const shelf=[...w.document.querySelectorAll('.bottom-nav button')].find(b=>b.textContent.includes('书架'));shelf.click();await delay(40);
+const shelf=w.document.querySelector('.bottom-nav [aria-label="书架"]');shelf.click();await delay(40);
 const status=w.document.querySelector('[aria-label="书籍状态"]');status.value='已读';status.dispatchEvent(new w.Event('change',{bubbles:true}));await delay(60);
 assert.equal(JSON.parse(calls.filter(c=>c.method==='PUT').at(-1).body).status,'已读');
 assert.equal(JSON.parse(calls.filter(c=>c.method==='PUT').at(-1).body).percent,100);

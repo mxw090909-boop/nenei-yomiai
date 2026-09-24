@@ -1,6 +1,6 @@
 import { readingStatus } from './reading-status';
 import { useRemembered, usePagePosition, groupNotes } from './page-memory';
-import { BackupSettings, useAutoBackup } from './device-backup';
+import { BackupSettings } from './device-backup';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import './styles.css';
@@ -883,8 +883,8 @@ function BottomNav({ page, setPage }: { page: Page; setPage: (page: Page) => voi
   return (
     <nav className='bottom-nav'>
       {nav.map((item) => (
-        <button key={item.page} className={page === item.page ? 'active' : ''} onClick={() => setPage(item.page)}>
-          <span className='nav-icon'><NavIcon page={item.page} /></span>{item.label}
+        <button key={item.page} aria-label={item.label} aria-current={page === item.page ? 'page' : undefined} className={page === item.page ? 'active' : ''} onClick={() => setPage(item.page)}>
+          <span className='nav-icon' aria-hidden='true'><NavIcon page={item.page} /></span>
         </button>
       ))}
     </nav>
@@ -892,7 +892,6 @@ function BottomNav({ page, setPage }: { page: Page; setPage: (page: Page) => voi
 }
 
 function App() {
-  useAutoBackup();
   const [page, setPage] = useState<Page>('home');
   const [accent, setAccent] = useState(() => {
     try {
