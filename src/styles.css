@@ -126,7 +126,7 @@ button {
 
 .screen {
   position: absolute;
-  inset: 90px 0 60px;
+  inset: 90px 0 65px;
   overflow: auto;
   padding: 8px 26px 30px;
   z-index: 2;
@@ -643,7 +643,7 @@ h1, h2, h3, p { margin: 0; }
   left: 0;
   right: 0;
   bottom: 0;
-  height: 60px;
+  height: 65px;
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   background: rgba(255,254,250,.9);
@@ -985,9 +985,9 @@ h1, h2, h3, p { margin: 0; }
 .has-yomiai-reader-bg .phone-frame.reader-mode::after { background-image:linear-gradient(rgba(250,250,247,.30),rgba(250,250,247,.38)),var(--yomiai-reader-bg); }
 
 /* Shared header keeps the same compact rhythm outside the reader. */
-.phone-frame:not(.reader-mode) .topbar{height:64px;padding:10px 20px;background:rgba(250,250,247,.92);-webkit-backdrop-filter:none;backdrop-filter:none}
+.phone-frame:not(.reader-mode) .topbar{height:65px;padding:10px 20px;background:rgba(250,250,247,.92);-webkit-backdrop-filter:none;backdrop-filter:none}
 .phone-frame:not(.reader-mode) .brand{font-size:25px}
-.phone-frame:not(.reader-mode) .screen{top:64px;padding-top:12px}
+.phone-frame:not(.reader-mode) .screen{top:65px;padding-top:12px}
 .screen-title{margin-bottom:14px}
 .screen-title h1{font-size:30px}
 
