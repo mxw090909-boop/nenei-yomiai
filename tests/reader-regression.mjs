@@ -62,7 +62,7 @@ const bundle=readFileSync('dist/index.html','utf8').match(/src="[^"]*\/assets\/(
 w.eval(readFileSync('dist/assets/'+bundle,'utf8'));
 const delay=ms=>new Promise(r=>setTimeout(r,ms));
 const until=async(fn)=>{for(let i=0;i<100;i++){if(fn())return;await delay(20);}throw Error('Timed out: '+fn);};
-const button=text=>[...w.document.querySelectorAll('button')].find(b=>(b.getAttribute('aria-label')||b.textContent.trim())===text);
+const button=text=>[...w.document.querySelectorAll('button')].find(b=>b.getAttribute('aria-label')===text||b.textContent.trim()===text);
 const click=async(text)=>{assert.ok(button(text),'button '+text);button(text).click();await delay(40);};
 const input=(el,value)=>{const proto=el.tagName==='TEXTAREA'?w.HTMLTextAreaElement.prototype:w.HTMLInputElement.prototype;Object.getOwnPropertyDescriptor(proto,'value').set.call(el,value);el.dispatchEvent(new w.Event('input',{bubbles:true}));};
 await until(()=>button('继续阅读') && w.document.querySelector('.quote-open'));
