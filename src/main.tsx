@@ -337,7 +337,9 @@ function ShelfPage({ books, selectedBookId, onSelectBook, onImport, importing, o
   );
 }
 
-function ReaderPage({ book, chapter, chapters, annotations, chapterIndex, setChapterIndex, selectedFont, fontSize, setFontSize, paragraphIndex, setParagraphIndex, setPage, onAddAnnotation, onPosition, initialOffset, onReadNotes, onLoadChapters }: {
+function ReaderPage({ noteJump, onConsumeJump, book, chapter, chapters, annotations, chapterIndex, setChapterIndex, selectedFont, fontSize, setFontSize, paragraphIndex, setParagraphIndex, setPage, onAddAnnotation, onPosition, initialOffset, onReadNotes, onLoadChapters }: {
+  noteJump: Annotation | null;
+  onConsumeJump: () => void;
   onPosition: (paragraph: number, offset: number, fraction: number, pastFirstScreen: boolean, atEnd: boolean) => void;
   initialOffset?: number;
   onReadNotes: (notes: Annotation[]) => void;
@@ -357,6 +359,27 @@ function ReaderPage({ book, chapter, chapters, annotations, chapterIndex, setCha
   onAddAnnotation: (text: string, quote?: string, paragraphIndex?: number) => Promise<void>;
 }) {
   const screenRef = useRef<HTMLElement>(null);
+  const [arrival, setArrival] = useState<{ index: number; quote: string } | null>(null);
+  const jumpIndex = noteJump && chapter ? (() => {
+    const quoted = noteJump.quote?.trim() || '';
+    const index = noteJump.paragraphIndex;
+    if (index != null && chapter.paragraphs[index] && (!quoted || chapter.paragraphs[index].includes(quoted))) return index;
+    const match = quoted ? chapter.paragraphs.findIndex(text => text.includes(quoted)) : -1;
+    return match >= 0 ? match : index;
+  })() : undefined;
+  useEffect(() => {
+    if (!noteJump || !chapter) return;
+    if (jumpIndex != null && chapter.paragraphs[jumpIndex]) {
+      setParagraphIndex(jumpIndex);
+      setArrival({ index: jumpIndex, quote: noteJump.quote?.trim() || '' });
+    }
+    onConsumeJump();
+  }, [noteJump, chapter]);
+  useEffect(() => {
+    if (!arrival) return;
+    const timer = window.setTimeout(() => setArrival(null), 3100);
+    return () => window.clearTimeout(timer);
+  }, [arrival]);
   const [search, setSearch] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -438,7 +461,7 @@ function ReaderPage({ book, chapter, chapters, annotations, chapterIndex, setCha
     annotations: Annotation[];
   } | null>(null);
 
-  const capturePosition = useReaderScroll(screenRef, { chapterKey: `${book?.id}-${chapterIndex}`, paragraphIndex, initialOffset, fontSize, onPosition });
+  const capturePosition = useReaderScroll(screenRef, { chapterKey: `${book?.id}-${chapterIndex}`, paragraphIndex: jumpIndex ?? paragraphIndex, initialOffset, fontSize, onPosition });
   const chooseTarget = (target: NonNullable<typeof annotationTarget>) => {
     const key = `${draftKey}-${target.paragraphIndex ?? "chapter"}-${encodeURIComponent(target.quote)}`;
     setDraft(localStorage.getItem(key) || '');
@@ -463,6 +486,7 @@ function ReaderPage({ book, chapter, chapters, annotations, chapterIndex, setCha
   }
 
   const goChapter = (index: number, nextParagraph?: number) => {
+    setArrival(null);
     setAnnotationTarget(null);
     setThreadTarget(null);
     setComposerOpen(false);
@@ -616,7 +640,10 @@ function ReaderPage({ book, chapter, chapters, annotations, chapterIndex, setCha
                   {count}
                 </button>
               )}
-              {text}
+              {arrival?.index === index ? (() => {
+                const start = arrival.quote ? text.indexOf(arrival.quote) : -1;
+                return start >= 0 ? <>{text.slice(0, start)}<mark className='reader-jump-mark'>{text.slice(start, start + arrival.quote.length)}</mark>{text.slice(start + arrival.quote.length)}</> : <mark className='reader-jump-mark'>{text}</mark>;
+              })() : text}
             </p>
           );
         })}
@@ -918,6 +945,7 @@ function App() {
 
   const [progressReady, setProgressReady] = useState('');
   const [initialOffset, setInitialOffset] = useState(0);
+  const [noteJump, setNoteJump] = useState<Annotation | null>(null);
   const [notice, setNotice] = useState('');
   const [chapterRetry, setChapterRetry] = useState(0);
   const [searchRequested, setSearchRequested] = useState(false);
@@ -1126,7 +1154,7 @@ function App() {
     }
     setPage(nextPage);
   };
-  const openNote = (note: Annotation) => { markRead([note]); setInitialOffset(0); setChapterIndex(note.chapterIndex); setParagraphIndex(note.paragraphIndex); setPage('reader'); };
+  const openNote = (note: Annotation) => { setNoteJump(note); markRead([note]); setInitialOffset(0); setChapterIndex(note.chapterIndex); setParagraphIndex(note.paragraphIndex); setPage('reader'); };
 
   const importBook = async (file: File) => {
     setImporting(true);
@@ -1191,7 +1219,7 @@ function App() {
           setPage('reader');
         }} onImport={importBook} importing={importing} />}
         {page === 'reader' && (progressReady !== selectedBook?.id || !chapter || chapter.bookId !== selectedBook?.id || chapter.chapterIndex !== chapterIndex) && <main className='screen'><p>正在打开书页…</p><button className='text-button' onClick={() => setChapterRetry(value => value + 1)}>重新加载</button></main>}
-        {page === 'reader' && progressReady === selectedBook?.id && chapter?.bookId === selectedBook?.id && chapter?.chapterIndex === chapterIndex && <ReaderPage key={`${selectedBook?.id}-${chapterIndex}`} initialOffset={initialOffset} onPosition={savePosition} onReadNotes={markRead} onLoadChapters={() => setSearchRequested(true)} book={selectedBook} chapter={chapter} chapters={chapters} annotations={annotations.filter(note => note.chapterIndex === chapterIndex)} chapterIndex={chapterIndex} setChapterIndex={index => { setInitialOffset(0); setChapterIndex(index); }} selectedFont={selectedFont} fontSize={fontSize} setFontSize={setFontSize} paragraphIndex={paragraphIndex} setParagraphIndex={setParagraphIndex} setPage={setPage} onAddAnnotation={addAnnotation} />}
+        {page === 'reader' && progressReady === selectedBook?.id && chapter?.bookId === selectedBook?.id && chapter?.chapterIndex === chapterIndex && <ReaderPage noteJump={noteJump} onConsumeJump={() => setNoteJump(null)} key={`${selectedBook?.id}-${chapterIndex}`} initialOffset={initialOffset} onPosition={savePosition} onReadNotes={markRead} onLoadChapters={() => setSearchRequested(true)} book={selectedBook} chapter={chapter} chapters={chapters} annotations={annotations.filter(note => note.chapterIndex === chapterIndex)} chapterIndex={chapterIndex} setChapterIndex={index => { setInitialOffset(0); setChapterIndex(index); }} selectedFont={selectedFont} fontSize={fontSize} setFontSize={setFontSize} paragraphIndex={paragraphIndex} setParagraphIndex={setParagraphIndex} setPage={setPage} onAddAnnotation={addAnnotation} />}
         {page === 'notes' && <NotesPage key={selectedBook?.id} book={selectedBook} annotations={annotations} onOpen={openNote} isUnread={isUnread} />}
         {page === 'toc' && <TocPage book={selectedBook} chapters={chapters} chapterIndex={chapterIndex} setChapterIndex={index => { setParagraphIndex(undefined); setInitialOffset(0); setChapterIndex(index); }} setPage={setPage} />}
         {page === 'settings' && <SettingsPage elior={elior} nenei={nenei} setElior={setElior} setNenei={setNenei} accent={accent} setAccent={setAccent} fonts={fonts} selectedFont={selectedFont} setSelectedFont={setSelectedFont} onImportFont={importFont} />}

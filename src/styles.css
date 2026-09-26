@@ -981,8 +981,8 @@ h1, h2, h3, p { margin: 0; }
 .note-card footer button { text-decoration:underline; }
 .app-notice,.reader-error { position:absolute; z-index:1500; bottom:90px; left:14px; right:14px; padding:12px; background:#fff2dc; border:1px solid #cbb997; font-size:13px; }
 .has-yomiai-home-bg .phone-frame:not(.reader-mode)::after,.has-yomiai-reader-bg .phone-frame.reader-mode::after { content:'';position:absolute;inset:0;pointer-events:none;background-size:cover;background-position:center;z-index:0; }
-.has-yomiai-home-bg .phone-frame:not(.reader-mode)::after { background-image:linear-gradient(rgba(250,250,247,.24),rgba(250,250,247,.32)),var(--yomiai-home-bg); }
-.has-yomiai-reader-bg .phone-frame.reader-mode::after { background-image:linear-gradient(rgba(250,250,247,.30),rgba(250,250,247,.38)),var(--yomiai-reader-bg); }
+.has-yomiai-home-bg .phone-frame:not(.reader-mode)::after { background-image:linear-gradient(rgba(250,250,247,var(--yomiai-home-veil,.24)),rgba(250,250,247,var(--yomiai-home-veil-end,.32))),var(--yomiai-home-bg); }
+.has-yomiai-reader-bg .phone-frame.reader-mode::after { background-image:linear-gradient(rgba(250,250,247,var(--yomiai-reader-veil,.30)),rgba(250,250,247,var(--yomiai-reader-veil-end,.38))),var(--yomiai-reader-bg); }
 
 /* Shared header keeps the same compact rhythm outside the reader. */
 .phone-frame:not(.reader-mode) .topbar{height:65px;padding:10px 20px;background:rgba(250,250,247,.92);-webkit-backdrop-filter:none;backdrop-filter:none}
@@ -1179,3 +1179,12 @@ h1, h2, h3, p { margin: 0; }
   border-color:var(--paper-edge);
 }
 @media(prefers-reduced-motion:reduce){.continue-book{transition:none}.continue-book:active{transform:none}}
+
+.background-opacity{display:grid;gap:6px;margin-top:18px}
+.background-opacity>span,.background-opacity>small{display:flex;justify-content:space-between;gap:12px}
+.background-opacity>span{font-size:13px;color:var(--accent)}
+.background-opacity>small{font-size:11px;color:#8b857b}
+.background-opacity input{width:100%;height:32px;margin:0;accent-color:var(--accent)}
+.reader-jump-mark{color:inherit;background:transparent;box-decoration-break:clone;-webkit-box-decoration-break:clone;animation:note-arrival 3s ease-out both}
+@keyframes note-arrival{0%,40%{background:color-mix(in srgb,var(--accent) 20%,transparent)}100%{background:transparent}}
+@media(prefers-reduced-motion:reduce){.reader-jump-mark{animation:none;background:color-mix(in srgb,var(--accent) 15%,transparent)}}

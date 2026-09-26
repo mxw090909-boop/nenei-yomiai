@@ -97,8 +97,17 @@ export function useReaderScroll(ref: RefObject<HTMLElement | null>, options: Rea
 
 const HOME_KEY = 'nenei-yomiai-home-bg-url';
 const READER_KEY = 'nenei-yomiai-reader-bg-url';
+const opacityKey = (name: string) => `nenei-yomiai-${name}-bg-opacity`;
+function readOpacity(name: string) {
+  const stored = localStorage.getItem(opacityKey(name));
+  const value = stored === null ? NaN : Number(stored);
+  return Number.isFinite(value) ? Math.max(0, Math.min(100, value)) : name === 'home' ? 24 : 30;
+}
 function applyBackgrounds() {
   for (const [key, name] of [[HOME_KEY, 'home'], [READER_KEY, 'reader']]) {
+    const opacity = readOpacity(name);
+    document.documentElement.style.setProperty(`--yomiai-${name}-veil`, String(opacity / 100));
+    document.documentElement.style.setProperty(`--yomiai-${name}-veil-end`, String(Math.min(100, opacity + 8) / 100));
     const value = localStorage.getItem(key) || '';
     document.documentElement.style.setProperty(`--yomiai-${name}-bg`, value ? `url(${JSON.stringify(value)})` : 'none');
     document.documentElement.classList.toggle(`has-yomiai-${name}-bg`, Boolean(value));
@@ -108,12 +117,21 @@ export function useBackgrounds() {
   useEffect(() => { applyBackgrounds(); window.addEventListener('storage', applyBackgrounds); return () => window.removeEventListener('storage', applyBackgrounds); }, []);
 }
 export function BackgroundSettings() {
+  const [opacity, setOpacity] = useState(() => ({ home: readOpacity('home'), reader: readOpacity('reader') }));
   const [home, setHome] = useState(localStorage.getItem(HOME_KEY) || '');
   const [reader, setReader] = useState(localStorage.getItem(READER_KEY) || '');
   const update = (key: string, value: string) => { localStorage.setItem(key, value); applyBackgrounds(); };
   return <section className='settings-card'>
-    <div className='settings-head'><h2>背景设置</h2><button onClick={() => { setHome(''); setReader(''); update(HOME_KEY, ''); update(READER_KEY, ''); }}>恢复默认</button></div>
+    <div className='settings-head'><h2>背景设置</h2><button onClick={() => { setHome(''); setReader(''); setOpacity({ home: 24, reader: 30 }); localStorage.removeItem(opacityKey('home')); localStorage.removeItem(opacityKey('reader')); update(HOME_KEY, ''); update(READER_KEY, ''); }}>恢复默认</button></div>
     <label className='field'><span>主页背景图 URL</span><input value={home} onChange={e => { setHome(e.target.value); update(HOME_KEY, e.target.value); }} placeholder='https://…' /></label>
     <label className='field'><span>阅读器背景图 URL</span><input value={reader} onChange={e => { setReader(e.target.value); update(READER_KEY, e.target.value); }} placeholder='https://…' /></label>
+    {(['home', 'reader'] as const).map(name => <label className='background-opacity' key={name}>
+      <span>{name === 'home' ? '页面遮罩' : '阅读遮罩'}<output>{opacity[name]}%</output></span>
+      <input type='range' min='0' max='100' step='1' aria-label={name === 'home' ? '页面遮罩浓度' : '阅读遮罩浓度'} value={opacity[name]} onChange={e => {
+        const value = Number(e.target.value);
+        setOpacity(current => ({ ...current, [name]: value })); update(opacityKey(name), String(value));
+      }} />
+      <small><span>背景更清晰</span><span>纸面更浓</span></small>
+    </label>)}
   </section>;
 }
