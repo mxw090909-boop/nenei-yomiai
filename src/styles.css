@@ -743,24 +743,20 @@ h1, h2, h3, p { margin: 0; }
   clip-path: none;
 }
 
-/* Rounded, slanted nib ends join a lower stroke on each wrapped line. */
+/* One masked ink image per wrapped line: no cap/centre rasterization seams. */
 .reader-note-highlight {
-  --marker-ink: color-mix(in srgb, var(--reader-marker-base, var(--accent)) 27%, transparent);
-  --marker-left: var(--reader-marker-left-idle);
-  --marker-right: var(--reader-marker-right-idle);
+  --marker-image: var(--reader-marker-idle);
   color: inherit;
   background-color: transparent;
-  background-image: var(--marker-left), linear-gradient(var(--marker-ink), var(--marker-ink)), var(--marker-right);
-  background-size: min(0.4em, 50%) 0.74em, max(0px, calc(100% - 0.8em)) 0.74em, min(0.4em, 50%) 0.74em;
-  background-position: left 90%, center 90%, right 90%;
+  background-image: var(--marker-image);
+  background-size: 100% 0.74em;
+  background-position: left 90%;
   background-repeat: no-repeat;
   -webkit-box-decoration-break: clone;
   box-decoration-break: clone;
 }
 .paragraph-thread-open .reader-note-highlight {
-  --marker-ink: color-mix(in srgb, var(--reader-marker-base, var(--accent)) 39%, transparent);
-  --marker-left: var(--reader-marker-left-active);
-  --marker-right: var(--reader-marker-right-active);
+  --marker-image: var(--reader-marker-active);
 }
 .reading-paper p.paragraph-has-note.paragraph-selected,
 .reading-paper p.paragraph-has-note.paragraph-thread-open {
@@ -1209,7 +1205,7 @@ h1, h2, h3, p { margin: 0; }
 @keyframes note-arrival{0%,40%{background:color-mix(in srgb,var(--accent) 20%,transparent)}100%{background:transparent}}
 @media(prefers-reduced-motion:reduce){.reader-jump-mark{animation:none;background:color-mix(in srgb,var(--accent) 15%,transparent)}}
 .reader-jump-mark:has(.reader-note-highlight){animation:none;background:transparent}
-.reader-jump-mark .reader-note-highlight{--marker-ink:color-mix(in srgb,var(--reader-marker-base,var(--accent)) 39%,transparent);--marker-left:var(--reader-marker-left-active);--marker-right:var(--reader-marker-right-active)}
+.reader-jump-mark .reader-note-highlight{--marker-image:var(--reader-marker-active)}
 
 .selection-highlight{min-height:44px;padding:8px 10px;white-space:nowrap;color:var(--accent);font-size:12px}
 .selection-highlight:disabled{opacity:.5}

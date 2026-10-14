@@ -1,5 +1,5 @@
 import { readingStatus } from './reading-status';
-import { annotatedSegments, markerBaseColor, markerCaps, normalizeQuote, quoteThreads, quoteFragments } from './annotation-highlight';
+import { annotatedSegments, markerBaseColor, markerStroke, normalizeQuote, quoteThreads, quoteFragments } from './annotation-highlight';
 import { useRemembered, usePagePosition, groupNotes } from './page-memory';
 import { BackupSettings } from './device-backup';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
@@ -993,7 +993,7 @@ function App() {
   const avatarHydrated = useRef({ elior: false, nenei: false });
 
   const selectedBook = books.find((book) => book.id === selectedBookId) || books[0];
-  const style = useMemo(() => ({ '--accent': accent, '--reader-marker-base': markerBaseColor(accent), ...markerCaps(accent) } as React.CSSProperties), [accent]);
+  const style = useMemo(() => ({ '--accent': accent, ...markerStroke(accent, fontSize) } as React.CSSProperties), [accent, fontSize]);
 
   const setSelectedFont = (value: string) => {
     setSelectedFontState(value);

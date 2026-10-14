@@ -90,19 +90,21 @@ export function markerBaseColor(accent: string) {
   return `rgb(${rgb.map(channel => Math.round(channel * scale)).join(', ')})`;
 }
 
-export function markerCaps(accent: string) {
+export function markerStroke(accent: string, fontSize: number) {
   const color = markerBaseColor(accent);
-  // Rounded nib corners join the straight stroke; cap width stays relative to the font.
-  const paths = {
-    left: 'M9.5 0H10V20H1.8Q0.5 20 1.1 18.4L8.4 1.4Q9 0 9.5 0Z',
-    right: 'M0 0H8.5Q9.9 0 9.3 1.6L2 18.6Q1.4 20 0.5 20H0Z',
-  };
+  const capWidth = Number((fontSize * .4).toFixed(3));
+  // Paint the translucent ink ONCE, then cut only the outer nib edges out of it.
+  // There are no separately rasterized cap/centre boundaries to leave pale seams
+  // (or overlapping translucent layers to make dark seams) at fractional pixels.
+  const leftCut = 'M0 0H9.5Q9 0 8.4 1.4L1.1 18.4Q0.5 20 1.8 20H0Z';
+  const rightCut = 'M8.5 0H10V20H0.5Q1.4 20 2 18.6L9.3 1.6Q9.9 0 8.5 0Z';
   const result: Record<string, string> = {};
   for (const [state, opacity] of [['idle', .27], ['active', .39]] as const) {
-    for (const [side, path] of Object.entries(paths)) {
-      const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 20" preserveAspectRatio="none"><path d="${path}" fill="${color}" fill-opacity="${opacity}"/></svg>`;
-      result[`--reader-marker-${side}-${state}`] = `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
-    }
+    // Nested SVGs retain font-relative nib widths as the outer viewport stretches
+    // to each line fragment. Clamp to half a fragment for very short highlights.
+    const nib = (side: 'left' | 'right', path: string) => `<svg x="${side === 'left' ? '0' : '100%'}" width="${capWidth}" height="100%" style="width:min(${capWidth}px,50%)" viewBox="0 0 10 20" preserveAspectRatio="none" overflow="visible"><path d="${path}"${side === 'right' ? ' transform="translate(-10 0)"' : ''} fill="black"/></svg>`;
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%"><defs><mask id="nib" maskUnits="userSpaceOnUse" x="0" y="0" width="100%" height="100%" style="mask-type:luminance"><rect width="100%" height="100%" fill="white"/>${nib('left', leftCut)}${nib('right', rightCut)}</mask></defs><rect width="100%" height="100%" fill="${color}" fill-opacity="${opacity}" mask="url(#nib)"/></svg>`;
+    result[`--reader-marker-${state}`] = `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
   }
   return result;
 }
