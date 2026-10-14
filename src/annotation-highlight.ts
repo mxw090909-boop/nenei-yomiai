@@ -1,4 +1,5 @@
 type TextRange = { start: number; end: number };
+export const normalizeQuote = (quote?: string) => (quote || '').replace(/\s+/gu, ' ').trim();
 
 // Keep source offsets while matching the whitespace-normalized quotes saved by the reader.
 function normalizedText(text: string) {
@@ -17,25 +18,52 @@ function normalizedText(text: string) {
   return { value, offsets };
 }
 
-export function annotatedSegments(text: string, quotes: (string | undefined)[]) {
+export function quotedRanges(text: string, quotes: (string | undefined)[]) {
   const source = normalizedText(text);
-  const ranges: TextRange[] = [];
+  const ranges: (TextRange & { quote: string })[] = [];
   for (const quote of quotes) {
-    const clean = (quote || '').replace(/\s+/gu, ' ').trim();
+    const clean = normalizeQuote(quote);
     if (!clean) {
-      ranges.push({ start: 0, end: text.length });
+      ranges.push({ start: 0, end: text.length, quote: text });
       continue;
     }
     let from = 0;
     while (from < source.value.length) {
       const start = source.value.indexOf(clean, from);
       if (start < 0) break;
-      ranges.push({ start: source.offsets[start].start, end: source.offsets[start + clean.length - 1].end });
+      const range = { start: source.offsets[start].start, end: source.offsets[start + clean.length - 1].end };
+      ranges.push({ ...range, quote: text.slice(range.start, range.end) });
       from = start + clean.length;
     }
   }
   // Legacy notes with an outdated quote still belong to their resolved paragraph.
-  if (quotes.length && !ranges.length) ranges.push({ start: 0, end: text.length });
+  if (quotes.length && !ranges.length) ranges.push({ start: 0, end: text.length, quote: text });
+  return ranges;
+}
+
+export function quoteThreads<T extends { quote?: string }>(text: string, notes: T[]) {
+  const groups = new Map<string, { quote: string; notes: T[] }>();
+  for (const note of notes) {
+    const quote = quotedRanges(text, [note.quote])[0]?.quote || text;
+    const key = normalizeQuote(quote);
+    const thread = groups.get(key) || { quote, notes: [] };
+    thread.notes.push(note);
+    groups.set(key, thread);
+  }
+  return [...groups.values()];
+}
+
+export function quoteFragments(text: string, quotes: (string | undefined)[]) {
+  const ranges = quotedRanges(text, quotes);
+  const boundaries = [...new Set([0, text.length, ...ranges.flatMap(range => [range.start, range.end])])].sort((a,b) => a-b);
+  return boundaries.slice(0, -1).map((start, index) => ({
+    text: text.slice(start, boundaries[index + 1]),
+    quotes: [...new Set(ranges.filter(range => range.start <= start && range.end >= boundaries[index + 1]).map(range => range.quote))],
+  }));
+}
+
+export function annotatedSegments(text: string, quotes: (string | undefined)[]) {
+  const ranges = quotedRanges(text, quotes);
   const merged: TextRange[] = [];
   for (const range of ranges.sort((a, b) => a.start - b.start)) {
     const previous = merged[merged.length - 1];

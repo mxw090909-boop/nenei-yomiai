@@ -182,4 +182,48 @@ assert.equal(w.document.documentElement.style.getPropertyValue('--yomiai-home-ve
 await click('首页');await click('设置');
 assert.equal(w.document.querySelector('[aria-label="页面遮罩浓度"]').value,'52','opacity survives page navigation');
 console.log('PASS: reading timer, idle/background/suspend pause, daily quote persistence, paragraph cutoff, deduplication and paired notes; remote restore, no startup writes, smooth gesture, scroll bookmark, selection isolation, per-quote drafts, failed-save recovery, duplicate guard, search, return-to-reading, whole-book notes, filters, new-note refresh.');
+// Sentence threads remain separate inside one paragraph and replies keep that quotation.
+const firstQuote='这一段用于检验滚动', secondQuote='续读与批注';
+notes.splice(0,notes.length,
+  {id:'sentence-a',bookId:'test-book',chapterIndex:2,paragraphIndex:42,quote:firstQuote,text:'只属于第一句的留言',author:'ai',createdAt:new Date().toISOString()},
+  {id:'sentence-b',bookId:'test-book',chapterIndex:2,paragraphIndex:42,quote:secondQuote,text:'只属于第二句的留言',author:'nenei',createdAt:new Date().toISOString()});
+w.dispatchEvent(new w.Event('focus'));await delay(80);
+await click('首页');await click('继续阅读');await until(()=>w.document.querySelector('#paragraph-2-42 [data-note-quote]'));
+const spanFor=(index,quote)=>[...w.document.querySelectorAll(`#paragraph-2-${index} [data-note-quote]`)].find(span=>span.getAttribute('data-note-quote')===quote);
+spanFor(42,firstQuote).click();await delay(40);
+assert.equal(w.document.querySelector('.reader-thread-sheet blockquote').textContent,firstQuote);
+assert.ok(!w.document.querySelector('.reader-thread-sheet').textContent.includes('只属于第二句的留言'));
+await click('再写一条');assert.equal(w.document.querySelector('.reader-annotation-sheet blockquote').textContent,firstQuote);
+input(w.document.querySelector('textarea'),'接着第一句说');await click('保存');releaseSave();await delay(80);
+assert.equal(JSON.parse(calls.filter(call=>call.method==='POST').at(-1).body).quote,firstQuote);
+spanFor(42,secondQuote).click();await delay(40);
+assert.equal(w.document.querySelector('.reader-thread-sheet blockquote').textContent,secondQuote);
+assert.ok(!w.document.querySelector('.reader-thread-sheet').textContent.includes('接着第一句说'));
+await click('收起');
+const plainParagraph=w.document.querySelector('#paragraph-2-43');
+const textNode=plainParagraph.firstChild;
+const start=textNode.textContent.indexOf(firstQuote);
+const range=w.document.createRange();range.setStart(textNode,start);range.setEnd(textNode,start+firstQuote.length);
+w.getSelection().removeAllRanges();w.getSelection().addRange(range);
+plainParagraph.dispatchEvent(new w.MouseEvent('mouseup',{bubbles:true}));await delay(40);
+failSave=true;await click('划一下');
+assert.ok(w.document.body.textContent.includes('划线没保存成功'));
+assert.ok(w.document.querySelector('.reader-selection-bar'),'failed highlight keeps target');
+failSave=false;
+const beforeHighlights=calls.filter(call=>call.method==='POST').length;
+button('划一下').click();button('划一下').click();await delay(40);
+assert.equal(calls.filter(call=>call.method==='POST').length,beforeHighlights+1,'double tap creates one highlight');
+const highlightedBody=JSON.parse(calls.filter(call=>call.method==='POST').at(-1).body);
+assert.equal(highlightedBody.kind,'highlight');assert.equal(highlightedBody.text,'');assert.equal(highlightedBody.quote,firstQuote);assert.equal(highlightedBody.paragraphIndex,43);
+releaseSave();await until(()=>spanFor(43,firstQuote));
+spanFor(43,firstQuote).click();await delay(40);
+assert.equal(w.document.querySelector('.reader-thread-sheet .thread-note'),null,'pure highlight has no fake empty comment');
+assert.ok(w.document.querySelector('.highlight-only-copy'));
+await click('写页边');input(w.document.querySelector('textarea'),'后来补上的想法');await click('保存');releaseSave();await delay(80);
+spanFor(43,firstQuote).click();await delay(40);
+assert.equal(w.document.querySelectorAll('.reader-thread-sheet .thread-note').length,1);
+assert.ok(w.document.querySelector('.reader-thread-sheet').textContent.includes('后来补上的想法'));
+await click('收起');await click('回到首页');await click('继续阅读');await until(()=>spanFor(43,firstQuote));
+assert.ok(spanFor(43,firstQuote),'saved ink survives leaving and returning');
+console.log('PASS: sentence isolation, quote-preserving replies, highlight-only persistence, failed-save recovery, double-tap guard, and later notes.');
 dom.window.close();

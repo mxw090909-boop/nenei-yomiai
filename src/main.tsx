@@ -1,5 +1,5 @@
 import { readingStatus } from './reading-status';
-import { annotatedSegments, markerBaseColor, markerCaps } from './annotation-highlight';
+import { annotatedSegments, markerBaseColor, markerCaps, normalizeQuote, quoteThreads, quoteFragments } from './annotation-highlight';
 import { useRemembered, usePagePosition, groupNotes } from './page-memory';
 import { BackupSettings } from './device-backup';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
@@ -357,7 +357,7 @@ function ReaderPage({ noteJump, onConsumeJump, book, chapter, chapters, annotati
   paragraphIndex?: number;
   setParagraphIndex: (index?: number) => void;
   setPage: (page: Page) => void;
-  onAddAnnotation: (text: string, quote?: string, paragraphIndex?: number) => Promise<void>;
+  onAddAnnotation: (text: string, quote?: string, paragraphIndex?: number, kind?: 'highlight') => Promise<void>;
 }) {
   const screenRef = useRef<HTMLElement>(null);
   const [arrival, setArrival] = useState<{ index: number; quote: string } | null>(null);
@@ -461,6 +461,7 @@ function ReaderPage({ noteJump, onConsumeJump, book, chapter, chapters, annotati
     paragraphIndex: number;
     annotations: Annotation[];
   } | null>(null);
+  const [threadChoices, setThreadChoices] = useState<{ paragraphIndex: number; quotes: string[] } | null>(null);
 
   const capturePosition = useReaderScroll(screenRef, { chapterKey: `${book?.id}-${chapterIndex}`, paragraphIndex: jumpIndex ?? paragraphIndex, initialOffset, fontSize, onPosition });
   const chooseTarget = (target: NonNullable<typeof annotationTarget>) => {
@@ -480,7 +481,7 @@ function ReaderPage({ noteJump, onConsumeJump, book, chapter, chapters, annotati
     }
   };
   useEffect(() => {
-    setThreadTarget(current => current ? { ...current, annotations: annotationsByParagraph.get(current.paragraphIndex) || [] } : null);
+    setThreadTarget(current => current ? { ...current, annotations: quoteThreads(chapter?.paragraphs[current.paragraphIndex] || '', annotationsByParagraph.get(current.paragraphIndex) || []).find(thread => normalizeQuote(thread.quote) === normalizeQuote(current.quote))?.notes || [] } : null);
   }, [annotationsByParagraph]);
   if (!book) {
     return <main className='screen reader-screen'><p className='empty-copy'>先去书架导入一本书。</p></main>;
@@ -490,6 +491,7 @@ function ReaderPage({ noteJump, onConsumeJump, book, chapter, chapters, annotati
     setArrival(null);
     setAnnotationTarget(null);
     setThreadTarget(null);
+    setThreadChoices(null);
     setComposerOpen(false);
     setParagraphIndex(nextParagraph);
     setChapterIndex(Math.min(book.chapterCount, Math.max(1, index)));
@@ -512,14 +514,25 @@ function ReaderPage({ noteJump, onConsumeJump, book, chapter, chapters, annotati
       paragraphIndex: parsedParagraphIndex != null && Number.isFinite(parsedParagraphIndex) ? parsedParagraphIndex : paragraphIndex,
       source: 'selection',
     });
+    setThreadTarget(null);
+    setThreadChoices(null);
     setComposerOpen(false);
   };
 
-  const openAnnotationThread = (index: number, text: string) => {
-    const existing = annotationsByParagraph.get(index) || [];
+  const openAnnotationThread = (index: number, quote?: string) => {
+    const threads = quoteThreads(chapter?.paragraphs[index] || '', annotationsByParagraph.get(index) || []);
+    if (!quote && threads.length > 1) {
+      setThreadChoices({ paragraphIndex: index, quotes: threads.map(thread => thread.quote) });
+      setThreadTarget(null); setComposerOpen(false);
+      return;
+    }
+    const thread = quote ? threads.find(thread => normalizeQuote(thread.quote) === normalizeQuote(quote)) : threads[0];
+    if (!thread) return;
+    const existing = thread.notes;
     onReadNotes(existing);
-    chooseTarget({ quote: text, paragraphIndex: index, source: 'paragraph' });
-    setThreadTarget({ quote: text, paragraphIndex: index, annotations: existing });
+    chooseTarget({ quote: thread.quote, paragraphIndex: index, source: 'selection' });
+    setThreadTarget({ quote: thread.quote, paragraphIndex: index, annotations: existing });
+    setThreadChoices(null);
     setComposerOpen(false);
   };
 
@@ -528,10 +541,11 @@ function ReaderPage({ noteJump, onConsumeJump, book, chapter, chapters, annotati
     if (selectedText.length > 1) return;
     const existing = annotationsByParagraph.get(index) || [];
     if (existing.length) {
-      openAnnotationThread(index, text);
+      openAnnotationThread(index);
       return;
     }
     setThreadTarget(null);
+    setThreadChoices(null);
     chooseTarget({ quote: text, paragraphIndex: index, source: 'paragraph' });
     setComposerOpen(false);
   };
@@ -539,6 +553,7 @@ function ReaderPage({ noteJump, onConsumeJump, book, chapter, chapters, annotati
   const closeAnnotationTarget = () => {
     setAnnotationTarget(null);
     setThreadTarget(null);
+    setThreadChoices(null);
     setComposerOpen(false);
     window.getSelection()?.removeAllRanges();
   };
@@ -557,6 +572,23 @@ function ReaderPage({ noteJump, onConsumeJump, book, chapter, chapters, annotati
     window.getSelection()?.removeAllRanges();
     } catch { setSaveError('保存失败，草稿已保留。'); }
     finally { savingRef.current = false; setSaving(false); }
+  };
+
+  const saveHighlight = async () => {
+    if (!annotationTarget || savingRef.current) return;
+    const existing = annotationsByParagraph.get(annotationTarget.paragraphIndex ?? -1) || [];
+    if (existing.some(note => note.author === 'nenei' && normalizeQuote(note.quote) === normalizeQuote(annotationTarget.quote))) {
+      closeAnnotationTarget(); return;
+    }
+    savingRef.current = true; setSaving(true); setSaveError('');
+    try {
+      await onAddAnnotation('', annotationTarget.quote, annotationTarget.paragraphIndex, 'highlight');
+      closeAnnotationTarget();
+    } catch {
+      setSaveError('划线没保存成功，选中的文字还在，再试一下。');
+    } finally {
+      savingRef.current = false; setSaving(false);
+    }
   };
 
   return (
@@ -630,7 +662,12 @@ function ReaderPage({ noteJump, onConsumeJump, book, chapter, chapters, annotati
             >
               {(() => {
                 const markedText = annotatedSegments(text, paragraphAnnotations.map(note => note.quote)).map((segment, part) =>
-                  segment.highlighted ? <mark key={part} className='reader-note-highlight'>{segment.text}</mark> : segment.text,
+                  segment.highlighted ? <mark key={part} className='reader-note-highlight'>{quoteFragments(segment.text, paragraphAnnotations.map(note => note.quote)).map((fragment, fragmentIndex) => <span key={fragmentIndex} data-note-quote={fragment.quotes.join('\n')} onClick={event => {
+                    if ((window.getSelection()?.toString().trim().length || 0) > 1) return;
+                    event.stopPropagation();
+                    if (fragment.quotes.length > 1) { setThreadChoices({ paragraphIndex: index, quotes: fragment.quotes }); setThreadTarget(null); setComposerOpen(false); }
+                    else openAnnotationThread(index, fragment.quotes[0]);
+                  }}>{fragment.text}</span>)}</mark> : segment.text,
                 );
                 if (arrival?.index !== index) return markedText;
                 const start = arrival.quote ? text.indexOf(arrival.quote) : -1;
@@ -638,7 +675,7 @@ function ReaderPage({ noteJump, onConsumeJump, book, chapter, chapters, annotati
                 if (count) return <span className='reader-jump-mark'>{markedText}</span>;
                 return start >= 0 ? <>{text.slice(0, start)}<mark className='reader-jump-mark'>{text.slice(start, start + arrival.quote.length)}</mark>{text.slice(start + arrival.quote.length)}</> : <mark className='reader-jump-mark'>{text}</mark>;
               })()}
-              {count > 0 && <button type='button' className='reader-note-access' aria-label={`查看 ${count} 条批注`} onClick={event => { event.stopPropagation(); openAnnotationThread(index, text); }}>查看页边</button>}
+              {count > 0 && <button type='button' className='reader-note-access' aria-label={`查看 ${count} 条批注`} onClick={event => { event.stopPropagation(); openAnnotationThread(index); }}>查看页边</button>}
             </p>
           );
         })}
@@ -660,17 +697,19 @@ function ReaderPage({ noteJump, onConsumeJump, book, chapter, chapters, annotati
         />
       </div>
 
-      {annotationTarget && !composerOpen && !threadTarget && (
+      {annotationTarget && !composerOpen && !threadTarget && !threadChoices && (
         <div className='reader-selection-bar'>
           <button className='selection-summary' onClick={() => setComposerOpen(true)}>
             <span>{annotationTarget.source === 'selection' ? '已选文字' : `第 ${(annotationTarget.paragraphIndex ?? 0) + 1} 段`}</span>
             <strong>{annotationTarget.quote.slice(0, 36)}{annotationTarget.quote.length > 36 ? '…' : ''}</strong>
           </button>
+          <button className='selection-highlight' disabled={saving} onClick={saveHighlight}>{saving ? '保存中' : '划一下'}</button>
           <button className='selection-add' onClick={() => setComposerOpen(true)}>+ Nenei 页边</button>
           <button className='selection-close' onClick={closeAnnotationTarget} aria-label='取消批注目标'>×</button>
         </div>
       )}
 
+      {threadChoices && !composerOpen && <div className='reader-sheet-backdrop' onClick={() => setThreadChoices(null)}><section className='reader-annotation-sheet' onClick={event => event.stopPropagation()}><p className='sheet-label'>这几句的页边</p><div className='reader-thread-choices'>{threadChoices.quotes.map(quote => <button key={quote} onClick={() => openAnnotationThread(threadChoices.paragraphIndex, quote)}>{quote}</button>)}</div><div className='sheet-actions'><button onClick={() => setThreadChoices(null)}>收起</button></div></section></div>}
 
       {threadTarget && !composerOpen && (
         <div className='reader-sheet-backdrop' onClick={() => setThreadTarget(null)}>
@@ -679,7 +718,7 @@ function ReaderPage({ noteJump, onConsumeJump, book, chapter, chapters, annotati
             <p className='sheet-label'>页边</p>
             <blockquote>{threadTarget.quote}</blockquote>
             <div className='thread-note-list'>
-              {threadTarget.annotations.map((annotation) => (
+              {threadTarget.annotations.filter(annotation => annotation.text.trim()).map((annotation) => (
                 <article className='thread-note' data-author={annotation.author} key={annotation.id}>
                   <div>
                     <strong>{annotation.author === 'ai' ? 'Elior' : 'Nenei'}</strong>
@@ -689,14 +728,15 @@ function ReaderPage({ noteJump, onConsumeJump, book, chapter, chapters, annotati
                   <p>{annotation.text}</p>
                 </article>
               ))}
+              {!threadTarget.annotations.some(annotation => annotation.text.trim()) && <p className='highlight-only-copy'>这一句已经划下来了，想说的话可以慢慢补。</p>}
             </div>
             <div className='sheet-actions'>
               <button onClick={closeAnnotationTarget}>收起</button>
               <button className='solid-button' onClick={() => {
-                chooseTarget({ quote: threadTarget.quote, paragraphIndex: threadTarget.paragraphIndex, source: 'paragraph' });
+                chooseTarget({ quote: threadTarget.quote, paragraphIndex: threadTarget.paragraphIndex, source: 'selection' });
                 setThreadTarget(null);
                 setComposerOpen(true);
-              }}>再写一条</button>
+              }}>{threadTarget.annotations.some(annotation => annotation.text.trim()) ? '再写一条' : '写页边'}</button>
             </div>
           </section>
         </div>
@@ -737,19 +777,20 @@ function NotesPage({ book, annotations, onOpen, isUnread }: { book?: Book; annot
   const [keyword, setKeyword] = useRemembered(viewKey + '-keyword', '');
   const [filterOpen, setFilterOpen] = useRemembered(viewKey + '-open', false);
   const notesRef = usePagePosition(`${viewKey}-${author}-${chapterFilter}-${keyword}`, annotations.length > 0);
-  const filtered = annotations.filter(note => (author === 'all' || note.author === author || (author === 'unread' && isUnread(note))) && (chapterFilter === 'all' || note.chapterIndex === Number(chapterFilter)) && `${note.text} ${note.quote || ''}`.includes(keyword.trim())).sort((a, b) => a.chapterIndex - b.chapterIndex || (a.paragraphIndex ?? Number.MAX_SAFE_INTEGER) - (b.paragraphIndex ?? Number.MAX_SAFE_INTEGER) || Date.parse(a.createdAt) - Date.parse(b.createdAt));
+  const filtered = annotations.filter(note => (author === 'all' || note.author === author || (author === 'unread' && isUnread(note)) || (author === 'highlights' && !note.text.trim())) && (chapterFilter === 'all' || note.chapterIndex === Number(chapterFilter)) && `${note.text} ${note.quote || ''}`.includes(keyword.trim())).sort((a, b) => a.chapterIndex - b.chapterIndex || (a.paragraphIndex ?? Number.MAX_SAFE_INTEGER) - (b.paragraphIndex ?? Number.MAX_SAFE_INTEGER) || Date.parse(a.createdAt) - Date.parse(b.createdAt));
   return <main ref={notesRef} className='screen notes-screen' aria-label='页边'>
     <p className='notes-context'><span>{book?.title || '未选择书本'}</span><small>{annotations.length} 条页边</small></p>
     <details className="note-filter-panel" open={filterOpen} onToggle={e => setFilterOpen(e.currentTarget.open)}><summary>筛选</summary>
     <div className='note-filters'>
-      <select aria-label='批注作者' value={author} onChange={e => setAuthor(e.target.value)}><option value='all'>我们两人</option><option value='ai'>Elior</option><option value='nenei'>Nenei</option><option value='unread'>未读留言</option></select>
+      <select aria-label='批注作者' value={author} onChange={e => setAuthor(e.target.value)}><option value='all'>我们两人</option><option value='ai'>Elior</option><option value='nenei'>Nenei</option><option value='unread'>未读留言</option><option value='highlights'>仅划线</option></select>
       <select aria-label='批注章节' value={chapterFilter} onChange={e => setChapterFilter(e.target.value)}><option value='all'>所有章节</option>{[...new Set(annotations.map(n => n.chapterIndex))].sort((a,b) => a-b).map(n => <option key={n} value={n}>第 {n} 章</option>)}</select>
       <input aria-label='搜索批注' value={keyword} onChange={e => setKeyword(e.target.value)} placeholder='找一句话或一个想法' />
     </div>
     </details>
     {groupNotes(filtered).map(({key, entries}) => <section className='note-thread' key={key}>
       {entries[0].quote && <blockquote>{entries[0].quote}</blockquote>}
-      {entries.map(note => <article className='note-card' data-author={note.author} key={note.id}><div className='note-head'><strong>{note.author === 'ai' ? 'Elior' : 'Nenei'}{isUnread(note) ? ' · 未读' : ''}</strong><small>{new Date(note.createdAt).toLocaleDateString()}</small></div><p>{note.text}</p></article>)}
+      {entries.filter(note => note.text.trim()).map(note => <article className='note-card' data-author={note.author} key={note.id}><div className='note-head'><strong>{note.author === 'ai' ? 'Elior' : 'Nenei'}{isUnread(note) ? ' · 未读' : ''}</strong><small>{new Date(note.createdAt).toLocaleDateString()}</small></div><p>{note.text}</p></article>)}
+      {!entries.some(note => note.text.trim()) && <p className='highlight-only-copy'>已划线 · 还没写页边</p>}
       <footer><small>第 {entries[0].chapterIndex} 章</small><button onClick={() => onOpen(entries[0])}>回到原文</button></footer>
     </section>)}
     {!filtered.length && <p className='empty-copy'>这里还没有符合条件的页边。</p>}
@@ -1141,7 +1182,7 @@ function App() {
     const next = [...new Set([...current, ...notes.filter(n => n.author === 'ai').map(n => n.id)])];
     localStorage.setItem('yomiai-seen-notes', JSON.stringify(next)); return next;
   });
-  const isUnread = (note: Annotation) => note.author === 'ai' && !seenNotes.includes(note.id);
+  const isUnread = (note: Annotation) => Boolean(note.text.trim()) && note.author === 'ai' && !seenNotes.includes(note.id);
   const continueReading = (nextPage: Page) => {
     if (nextPage === 'reader' && selectedBook) {
       const saved = loadLocalProgress(selectedBook.id);
@@ -1177,7 +1218,7 @@ function App() {
     setSelectedFont(family);
   };
 
-  const addAnnotation = async (text: string, quote?: string, targetParagraphIndex?: number) => {
+  const addAnnotation = async (text: string, quote?: string, targetParagraphIndex?: number, kind?: 'highlight') => {
     if (!selectedBook) return;
     await api(`/books/${selectedBook.id}/annotations`, {
       method: 'POST',
@@ -1187,6 +1228,7 @@ function App() {
         paragraphIndex: targetParagraphIndex,
         quote,
         text,
+        ...(kind ? { kind } : {}),
         author: 'nenei',
       }),
     });

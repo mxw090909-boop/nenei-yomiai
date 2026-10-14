@@ -1,5 +1,17 @@
 # Device backup API
 
+## Highlight-only annotations
+
+Copy `highlight_annotations.py` and `install_highlights.py` alongside the existing
+`server.py`, then run `python3 install_highlights.py /path/to/server.py` and restart
+the API service. The installer backs up changed server code and installs the
+annotation writer without a schema migration. A POST with `kind: "highlight"`,
+an empty `text`, and a nonempty `quote` plus paragraph index stores a pure highlight.
+Repeated identical highlight requests return the existing record. Notes retain
+their existing format; a later note is added with the same quote and paragraph.
+
+## Device backups
+
 Deploy `device_backups.py` alongside the existing `server.py`.
 Import `handle_backup` from `device_backups` and call it inside the existing
 GET/PUT exception handlers, before the other routes:

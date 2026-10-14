@@ -31,7 +31,7 @@ export function groupNotes<T extends Note>(notes: T[]) {
   const groups = new Map<string, T[]>();
   for (const note of notes) {
     const key = note.quote?.trim() && note.paragraphIndex != null
-      ? JSON.stringify([note.bookId, note.chapterIndex, note.paragraphIndex, note.quote.trim()]) : note.id;
+      ? JSON.stringify([note.bookId, note.chapterIndex, note.paragraphIndex, note.quote.replace(/\s+/g, ' ').trim()]) : note.id;
     const group = groups.get(key) || [];
     group.push(note); groups.set(key, group);
   }
