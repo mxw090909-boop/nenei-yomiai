@@ -79,6 +79,12 @@ assert.equal(calls.filter(c=>c.method==='PUT').length,0,'home must not overwrite
 await click('继续阅读'); await until(()=>w.document.querySelector('#paragraph-2-5')); await delay(100);
 let reader=w.document.querySelector('.reader-screen');
 assert.equal(reader.scrollTop,616,'newer server bookmark restored');
+const notedParagraph=w.document.querySelector('#paragraph-2-5');
+assert.equal(notedParagraph.querySelector('.reader-note-highlight').textContent,'正文 5','only the annotated quote gets ink');
+assert.equal(w.document.querySelector('.paragraph-note-dot'),null,'numbered dots removed');
+notedParagraph.querySelector('.reader-note-highlight').click();await delay(40);
+assert.ok(w.document.querySelector('.reader-thread-sheet').textContent.includes('第二章的留言'),'highlight opens existing thread');
+await click('收起');
 clock+=10000;timeTick();assert.equal(recordedTime(),10000,'foreground reading counts');
 w.dispatchEvent(new w.Event('blur'));clock+=10000;timeTick();assert.equal(recordedTime(),10000,'background reading pauses');
 w.dispatchEvent(new w.Event('focus'));

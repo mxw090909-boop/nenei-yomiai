@@ -720,32 +720,52 @@ h1, h2, h3, p { margin: 0; }
   border-left-color: rgba(17,17,17,.18);
 }
 
-.reading-paper p.reader-paragraph.paragraph-has-note {
-  border-left-color: rgba(17,17,17,.28);
-}
-
 .reading-paper p.reader-paragraph.paragraph-selected {
   border-left-color: var(--accent);
   background: rgba(17,17,17,.035);
 }
 
-.paragraph-note-dot {
+.reader-note-access {
   position: absolute;
-  left: -10px;
-  top: 1.25em;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 5px;
-  border: 1px solid var(--accent);
-  border-radius: 999px;
-  background: #fffefa;
-  color: var(--accent);
-  display: grid;
-  place-items: center;
-  font-size: 10px;
-  line-height: 1;
-  font-family: Inter, 'SF Pro Display', system-ui, sans-serif;
-  box-shadow: 0 4px 10px rgba(17,17,17,.08);
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.reader-note-access:focus-visible {
+  position: static;
+  width: auto;
+  height: auto;
+  clip-path: none;
+}
+
+/* Rounded, slanted nib ends join a lower stroke on each wrapped line. */
+.reader-note-highlight {
+  --marker-ink: color-mix(in srgb, var(--reader-marker-base, var(--accent)) 27%, transparent);
+  --marker-left: var(--reader-marker-left-idle);
+  --marker-right: var(--reader-marker-right-idle);
+  color: inherit;
+  background-color: transparent;
+  background-image: var(--marker-left), linear-gradient(var(--marker-ink), var(--marker-ink)), var(--marker-right);
+  background-size: min(0.4em, 50%) 0.74em, max(0px, calc(100% - 0.8em)) 0.74em, min(0.4em, 50%) 0.74em;
+  background-position: left 90%, center 90%, right 90%;
+  background-repeat: no-repeat;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+.paragraph-thread-open .reader-note-highlight {
+  --marker-ink: color-mix(in srgb, var(--reader-marker-base, var(--accent)) 39%, transparent);
+  --marker-left: var(--reader-marker-left-active);
+  --marker-right: var(--reader-marker-right-active);
+}
+.reading-paper p.paragraph-has-note.paragraph-selected,
+.reading-paper p.paragraph-has-note.paragraph-thread-open {
+  border-left-color: transparent;
+  background: transparent;
 }
 
 .reader-selection-bar {
@@ -1188,3 +1208,5 @@ h1, h2, h3, p { margin: 0; }
 .reader-jump-mark{color:inherit;background:transparent;box-decoration-break:clone;-webkit-box-decoration-break:clone;animation:note-arrival 3s ease-out both}
 @keyframes note-arrival{0%,40%{background:color-mix(in srgb,var(--accent) 20%,transparent)}100%{background:transparent}}
 @media(prefers-reduced-motion:reduce){.reader-jump-mark{animation:none;background:color-mix(in srgb,var(--accent) 15%,transparent)}}
+.reader-jump-mark:has(.reader-note-highlight){animation:none;background:transparent}
+.reader-jump-mark .reader-note-highlight{--marker-ink:color-mix(in srgb,var(--reader-marker-base,var(--accent)) 39%,transparent);--marker-left:var(--reader-marker-left-active);--marker-right:var(--reader-marker-right-active)}

@@ -9,7 +9,7 @@
     "dev": "vite --host 0.0.0.0",
     "build": "tsc -b && vite build",
     "preview": "vite preview --host 0.0.0.0",
-    "test": "npm run build && node tests/reader-regression.mjs && node tests/backup-regression.mjs && python3 tests/test_device_backups.py"
+    "test": "npm run build && node tests/annotation-highlight.mjs && node tests/reader-regression.mjs && node tests/backup-regression.mjs && python3 tests/test_device_backups.py"
   },
   "dependencies": {
     "react": "latest",

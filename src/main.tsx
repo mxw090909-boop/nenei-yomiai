@@ -1,4 +1,5 @@
 import { readingStatus } from './reading-status';
+import { annotatedSegments, markerBaseColor, markerCaps } from './annotation-highlight';
 import { useRemembered, usePagePosition, groupNotes } from './page-memory';
 import { BackupSettings } from './device-backup';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
@@ -627,23 +628,17 @@ function ReaderPage({ noteJump, onConsumeJump, book, chapter, chapters, annotati
               className={className}
               onClick={() => selectParagraph(index, text)}
             >
-              {count > 0 && (
-                <button
-                  type='button'
-                  className='paragraph-note-dot'
-                  aria-label={`查看 ${count} 条批注`}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    openAnnotationThread(index, text);
-                  }}
-                >
-                  {count}
-                </button>
-              )}
-              {arrival?.index === index ? (() => {
+              {(() => {
+                const markedText = annotatedSegments(text, paragraphAnnotations.map(note => note.quote)).map((segment, part) =>
+                  segment.highlighted ? <mark key={part} className='reader-note-highlight'>{segment.text}</mark> : segment.text,
+                );
+                if (arrival?.index !== index) return markedText;
                 const start = arrival.quote ? text.indexOf(arrival.quote) : -1;
+                // An annotated passage keeps its permanent ink when the arrival cue expires.
+                if (count) return <span className='reader-jump-mark'>{markedText}</span>;
                 return start >= 0 ? <>{text.slice(0, start)}<mark className='reader-jump-mark'>{text.slice(start, start + arrival.quote.length)}</mark>{text.slice(start + arrival.quote.length)}</> : <mark className='reader-jump-mark'>{text}</mark>;
-              })() : text}
+              })()}
+              {count > 0 && <button type='button' className='reader-note-access' aria-label={`查看 ${count} 条批注`} onClick={event => { event.stopPropagation(); openAnnotationThread(index, text); }}>查看页边</button>}
             </p>
           );
         })}
@@ -957,7 +952,7 @@ function App() {
   const avatarHydrated = useRef({ elior: false, nenei: false });
 
   const selectedBook = books.find((book) => book.id === selectedBookId) || books[0];
-  const style = useMemo(() => ({ '--accent': accent } as React.CSSProperties), [accent]);
+  const style = useMemo(() => ({ '--accent': accent, '--reader-marker-base': markerBaseColor(accent), ...markerCaps(accent) } as React.CSSProperties), [accent]);
 
   const setSelectedFont = (value: string) => {
     setSelectedFontState(value);
