@@ -53,6 +53,7 @@ w.fetch = async (url, opts={}) => {
 w.console.error = (...args) => { if(!String(args[0]).includes('indexedDB')) console.error(...args); };
 w.localStorage.setItem('nenei-yomiai-progress-test-book',JSON.stringify({chapterIndex:1,paragraphIndex:1,percent:1,updatedAt:1}));
 Object.defineProperty(w.HTMLElement.prototype,'getBoundingClientRect',{value:function(){
+  if (!this.isConnected) return {top:0,bottom:0,height:0,left:0,right:0,width:0,x:0,y:0};
   const reader=this.closest('.reader-screen');
   const index=this.getAttribute('data-paragraph-index');
   const top=index===null?100:240+Number(index)*100-(reader?.scrollTop || 0);
@@ -109,6 +110,16 @@ assert.equal(reader.scrollTop,1816,'gesture position stays untouched');
 let saved=JSON.parse(w.localStorage.getItem('nenei-yomiai-progress-test-book'));
 assert.equal(saved.paragraphIndex,17,'scroll records actual visible paragraph');
 assert.equal(saved.paragraphOffset,0);
+// Exit before the debounced save, while a paragraph is only partly read.
+reader.scrollTop=1850.25;reader.dispatchEvent(new w.Event('scroll'));
+await click('回到首页');
+saved=JSON.parse(w.localStorage.getItem('nenei-yomiai-progress-test-book'));
+assert.equal(saved.paragraphIndex,17,'unmount must save the visible paragraph before DOM removal');
+assert.equal(saved.paragraphOffset,.3425,'quick exit retains the position within the paragraph');
+await click('继续阅读');await delay(100);
+reader=w.document.querySelector('.reader-screen');
+assert.equal(reader.scrollTop,1850.25,'quick exit and re-entry restore the exact position, not the chapter end');
+reader.scrollTop=1816;reader.dispatchEvent(new w.Event('scroll'));await delay(700);
 const putCount=calls.filter(c=>c.method==='PUT').length;
 w.document.querySelector('#paragraph-2-20').click();await delay(120);
 assert.equal(reader.scrollTop,1816,'selecting a paragraph must not move text');

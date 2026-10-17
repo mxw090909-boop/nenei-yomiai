@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type RefObject } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
 
 type ReaderOptions = {
   chapterKey: string;
@@ -16,7 +16,10 @@ export function useReaderScroll(ref: RefObject<HTMLElement | null>, options: Rea
   const anchor = useRef({ paragraph: options.paragraphIndex ?? -1, offset: options.initialOffset || 0 });
   const capture = useRef<() => void>(() => {});
   const restore = useRef<() => void>(() => {});
-  useEffect(() => {
+  // Layout cleanup runs while the chapter still has measurable DOM geometry.
+  // A passive cleanup runs after removal and can mistake zero-sized paragraphs
+  // for already-scrolled content, overwriting the bookmark with the chapter end.
+  useLayoutEffect(() => {
     const reader = ref.current;
     const frame = reader?.closest('.phone-frame');
     if (!reader || !frame) return;
@@ -25,7 +28,7 @@ export function useReaderScroll(ref: RefObject<HTMLElement | null>, options: Rea
     let idle = 0, animation = 0, restoring = true, dirty = false;
     let lastTop = reader.scrollTop, directionStart = lastTop, direction = 0;
     const locate = () => {
-      if (!paragraphs.length) return;
+      if (!reader.isConnected || !paragraphs.length) return;
       const top = reader.getBoundingClientRect().top + 24;
       let low = 0, high = paragraphs.length - 1;
       while (low < high) {
@@ -34,6 +37,7 @@ export function useReaderScroll(ref: RefObject<HTMLElement | null>, options: Rea
         else high = mid;
       }
       const bounds = paragraphs[low].getBoundingClientRect();
+      if (bounds.height <= 0) return;
       anchor.current = { paragraph: low, offset: Math.max(0, Math.min(1, (top - bounds.top) / Math.max(1, bounds.height))) };
       const viewport = reader.getBoundingClientRect();
       const last = paragraphs[paragraphs.length - 1].getBoundingClientRect();
